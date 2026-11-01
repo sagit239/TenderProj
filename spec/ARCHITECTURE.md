@@ -1,0 +1,266 @@
+# Architecture
+
+> הארכיטקטורה הטכנית למימוש מערכת ניהול המכרזים, בהתבסס על `PRD.md`. התכנון פשוט ככל האפשר. כל השירותים פועלים במסלול חינמי, מלבד שירות ה-AI (Claude), שמשלמים עליו לפי שימוש עם תקרה חודשית. זה החריג שאושר ב-PRD.
+
+## 1. Technology Stack שנבחר
+
+| רכיב | טכנולוגיה | תפקיד |
+|------|-----------|-------|
+| Frontend + Backend | Next.js 16 (App Router) + TypeScript | ממשק המשתמש (עברית, RTL, Responsive) ו-Route Handlers בצד השרת: ניתוח, ייצוא, מיילים ותזכורות |
+| עיצוב | Tailwind CSS | עיצוב Responsive ותמיכה מובנית ב-RTL |
+| Database | Supabase (PostgreSQL) | נתוני המכרזים, תוצאות הניתוח, המשימות, אנשי הצוות והתזכורות |
+| אחסון קבצים | Supabase Storage (Bucket פרטי) | שמירת מסמכי המכרז המקוריים |
+| Authentication | Supabase Auth (מייל + סיסמה) | התחברות של המשתמשת היחידה |
+| ניתוח מסמכים (AI) | Claude API, מודל `claude-opus-5-5`, דרך `@anthropic-ai/sdk` | הפקת סיכום, מועדים, משימות וסעיפים בעייתיים מתוך מסמכי המכרז |
+| המרת קבצים | `mammoth` (Word) ו-`xlsx` / SheetJS (Excel) | המרת Word ו-Excel לטקסט. PDF, כולל סרוק, נשלח ל-Claude כמו שהוא |
+| שליחת מיילים | Gmail SMTP דרך `nodemailer` | תזכורות ושליחת סיכומים מחשבון Gmail ייעודי לפרויקט |
+| תזמון תזכורות | Supabase `pg_cron` + `pg_net` | קריאה כל 15 דקות ל-Endpoint ששולח את התזכורות שהגיע זמנן |
+| ייצוא Word | ספריית `docx` | קובץ Word בעברית (RTL) |
+| ייצוא PDF | עמוד הדפסה ייעודי + "שמירה כ-PDF" בדפדפן | PDF בעברית בלי ספריית PDF בצד השרת |
+| Hosting | Vercel | אחסון האפליקציה ופריסה אוטומטית מ-GitHub |
+| קוד המקור | Git Repository ב-GitHub | אחסון הקוד והיסטוריית הגרסאות |
+
+### החלטות טכנולוגיות מרכזיות
+- **Next.js על Vercel.** יש צורך ב-Backend: מפתחות סודיים ל-AI ולמייל, ניתוח שנמשך דקות ותזכורות מתוזמנות. Next.js מאחד ממשק ושרת בפרויקט אחד, ו-Vercel מתחבר ל-GitHub ופורס אוטומטית. בתוכנית החינמית זמן הריצה המקסימלי לפונקציה הוא 300 שניות, וזה מספיק לניתוח מכרז. החלופה שנבחנה: Netlify. בתוכנית החינמית שלו מגבלת זמן הריצה קצרה בהרבה (עשרות שניות), ולכן הוא לא מתאים לניתוח.
+- **Supabase.** משלב Database רלציוני, Auth ו-Storage בשירות אחד. התוכנית החינמית מאפשרת 2 פרויקטים פעילים, בדיוק Development ו-Production. נתוני המוצר רלציוניים (מכרז ← מסמכים, מועדים, משימות ← תזכורות), ולכן PostgreSQL מתאים ואין הצדקה ל-NoSQL. החלופה שנבחנה: Firebase. הוא NoSQL, ומידול הקשרים והשאילתות בו פחות פשוט.
+- **Claude.** נבחר על ידי המשתמשת. הוא קורא PDF סרוק (כל עמוד נקרא גם כתמונה), איכותו גבוהה בעברית, ומידע שנשלח דרך ה-API אינו משמש לאימון מודלים. בכך מתקיימת דרישת הפרטיות שב-PRD. המודל `claude-opus-5-5` הוא המודל המומלץ כברירת מחדל. החלופה הזולה יותר היא `claude-sonnet-5-5`, במחצית המחיר, ומעבר אליה דורש שינוי של משתנה אחד.
+- **Gmail SMTP.** חינמי, לא דורש בעלות על דומיין, ומכסת השליחה של חשבון Gmail פרטי (כ-500 נמענים ביום) גבוהה בהרבה מהצורך. החלופות שנבחנו: שירותי מייל ייעודיים כמו Resend. במסלול החינמי הם דורשים דומיין מאומת כדי לשלוח לנמענים חיצוניים.
+- **`pg_cron` לתזכורות.** ב-Vercel Hobby, Cron רץ רק פעם ביום, ובדיוק של עד שעה. תזכורת "3 שעות לפני הגשה" דורשת בדיקה תכופה. `pg_cron` ב-Supabase חינמי ומאפשר הפעלה כל 15 דקות. החלופה שנבחנה: GitHub Actions. ההפעלות המתוזמנות שם עלולות להתעכב בעשרות דקות.
+- **PDF דרך הדפסת הדפדפן.** יצירת PDF בעברית בצד השרת דורשת טיפול בגופנים ובכיווניות. עמוד הדפסה מעוצב פשוט ואמין יותר.
+
+**מקורות:**
+- [Vercel – Hobby plan](https://vercel.com/docs/plans/hobby)
+- [Vercel – Cron limits](https://vercel.com/docs/cron-jobs/usage-and-pricing)
+- [Vercel – Fair use / commercial usage](https://vercel.com/docs/limits/fair-use-guidelines)
+- [Supabase – Pricing](https://supabase.com/pricing)
+- [Supabase – Project pausing](https://supabase.com/docs/guides/platform/free-project-pausing)
+- [Supabase – pg_cron](https://supabase.com/docs/guides/database/extensions/pg_cron)
+- [Claude – PDF support](https://docs.claude.com/en/docs/build-with-claude/pdf-support)
+- [Claude – Pricing](https://www.anthropic.com/pricing)
+- [Gmail SMTP limits](https://serversmtp.com/limits-of-gmail-smtp-server/)
+
+### סיכונים ומגבלות
+- **Vercel Hobby מיועד לשימוש אישי ולא מסחרי.** לפי תנאי Vercel, שימוש לטובת רווח כספי של מישהו (גם ארגון) נחשב מסחרי ודורש תוכנית Pro, בכ-‎$20 לחודש. זו שאלה של תנאי שימוש, לא של יכולת טכנית. מבחינה טכנית המערכת זהה בשתי התוכניות, והמעבר הוא שינוי בחשבון בלבד, בלי שינוי קוד.
+- **עלות Claude.** ‏`claude-opus-5-5` עולה ‎$4 למיליון Tokens קלט ו-‎$20 למיליון Tokens פלט. הערכה: כ-‎$0.5–1 לניתוח מכרז של 60 עמודים, וכמה דולרים עד כ-‎$15 בחודש ב-5–10 מכרזים, כולל ניתוחים חוזרים. בחשבון Anthropic מגדירים תקרת הוצאה חודשית.
+- **השהיית פרויקט ב-Supabase.** פרויקט חינמי מושהה אחרי 7 ימים ללא פעילות. קריאת התזכורות כל 15 דקות פונה ל-Database דרך ה-API, ולכן היא אמורה להיחשב פעילות ולשמור על פרויקט ה-Production ער. פרויקט ה-Development עלול להיות מושהה בתקופות בלי פיתוח, ומחזירים אותו בלחיצה בלוח הבקרה. הנתונים נשמרים, ואפשר לשחזר עד שנה.
+- **זמן ניתוח.** ניתוח מכרז ארוך נמשך 1–3 דקות, בתוך מגבלת 300 השניות. מכרז חריג במיוחד עלול לחרוג. במקרה כזה מוצגת שגיאה עם אפשרות לנסות שוב.
+- **דיוק ההפניות.** העמוד והסעיף שמוצגים לכל ממצא מופקים על ידי ה-AI, ולפעמים הם לא מדויקים. ההפניה מוצגת כדי לאפשר אימות מול המקור.
+- **Gmail** עלול לחסום זמנית חשבון חדש ששולח מיילים רבים בבת אחת. בהיקף הצפוי זה לא צפוי לקרות.
+
+## 2. ארכיטקטורת המערכת
+
+### מבנה המערכת
+```
+דפדפן (מחשב / נייד)
+   │  ממשק עברי RTL
+   ▼
+Next.js על Vercel ───────────► Claude API   (ניתוח מסמכים)
+   • דפים                    ─► Gmail SMTP   (מיילים)
+   • Route Handlers
+   │
+   ▼
+Supabase
+   • Auth      – התחברות
+   • Postgres  – נתונים
+   • Storage   – קבצי המכרז
+   • pg_cron ──(כל 15 דק')──► Route Handler לשליחת תזכורות
+```
+
+| רכיב | אחריות |
+|---|---|
+| דפדפן | הצגת הממשק. קריאה וכתיבה ישירה ל-Supabase בפעולות פשוטות. העלאת קבצים ישירות ל-Storage |
+| Next.js – צד שרת | פעולות שדורשות סודות או זמן ריצה ארוך: ניתוח AI, שליחת מיילים, ייצוא Word, תזכורות |
+| Supabase | אחסון כל הנתונים והקבצים, אימות משתמשת, הרשאות (RLS) ותזמון |
+| Claude API | ניתוח המסמכים בלבד |
+| Gmail | שליחת המיילים בלבד |
+
+### Modules ושכבות
+- **ממשק (`app/`):** דפים לפי ה-User Flows שב-PRD: התחברות, מכרזים פעילים, מכרז חדש, מסך מכרז (לשוניות: סיכום, לוח זמנים, משימות, סעיפים בעייתיים, מסמכים), ארכיון, הוגשו לפי מחלקה, אנשי צוות, ועמוד הדפסה.
+- **שרת (`app/api/`):** Route Handlers. ראו "APIs ואינטגרציות".
+- **לוגיקה עסקית (`lib/`):**
+  - `ai`: בניית הבקשה ל-Claude, ה-Prompt והסכמה של התשובה. זו נקודת המגע היחידה עם ה-AI.
+  - `files`: שליפה מ-Storage והמרת Word ו-Excel לטקסט.
+  - `reminders`: כללי התזמון לפי סוג משימה, יצירה, ביטול ותזמון מחדש.
+  - `email`: שליחה ותבניות מייל (עברית, RTL).
+  - `db`: יצירת לקוחות Supabase, אחד לדפדפן ואחד לשרת.
+- **נתונים (`supabase/migrations/`):** קובצי SQL שמגדירים את מבנה ה-Database, את ה-RLS ואת ה-Bucket.
+
+הממשק פונה ל-`lib` ול-Supabase. ה-Route Handlers משתמשים ב-`lib`. רק `lib/ai` פונה ל-Claude, ורק `lib/email` פונה ל-Gmail.
+
+### Frontend ו-Backend
+- **Frontend:** רכיבי React ב-Next.js, עם `<html lang="he" dir="rtl">`, וממשק Responsive למחשב ולנייד. כל הדפים, מלבד דף ההתחברות, מוגנים, ומשתמשת שלא התחברה מועברת לדף ההתחברות.
+- **פעולות ישירות מהדפדפן מול Supabase:** קריאת נתונים, עריכה, שינוי סטטוס, שיוך משימות, סימון "בוצע", ניהול אנשי צוות והעלאת קבצים. הפעולות מוגנות ב-RLS.
+- **Backend (Route Handlers):** רק פעולות שדורשות סוד או זמן ריצה ארוך. יצירה, ביטול ותזמון מחדש של תזכורות נעשים ב-Database באמצעות Triggers. כך התזכורות מתעדכנות נכון בכל שינוי, לא משנה מאיפה הוא נעשה.
+
+### Data Model
+
+| טבלה | שדות עיקריים | הערות |
+|---|---|---|
+| `team_members` | id, name, role, email | role: `legal`, `accounting`, `team_manager`, `agent`, `division_manager`, `service_manager` (תוויות בעברית בממשק) |
+| `tenders` | id, name, department, status, analysis_status, analysis_error, created_at | department: `medical` / `safety`. status: `reviewing`, `preparing`, `not_bidding`, `submitted`, `won`, `lost`. analysis_status: `idle`, `running`, `done`, `failed` |
+| `tender_documents` | id, tender_id, file_name, storage_path, file_type, read_warning, analyzed_at | read_warning: קובץ שלא נקרא או נקרא חלקית |
+| `requirements` | id, tender_id, text, sort_order, is_manual | פריטי סיכום הדרישות |
+| `deadlines` | id, tender_id, type, title, due_at, source_ref, is_manual | type: `submission`, `bidders_meeting`, `clarification_questions`, `closing_meeting`, `other` |
+| `tasks` | id, tender_id, deadline_id?, title, type, due_at, assignee_id?, is_done, remind_me, remind_at?, is_manual | type: סוגי המועדים, ובנוסף `regular` |
+| `issues` | id, tender_id, category, title, explanation, page_ref, section_ref, suggested_question, is_manual | category: `threshold`, `guarantees`, `penalties`, `liability`, `insurance`, `payment_terms`, `one_sided`, `contradictions` |
+| `reminders` | id, task_id, recipient_email, send_at, kind, status, sent_at, error | kind: `scheduled` / `followup` / `self`. status: `pending`, `sent`, `cancelled`, `failed` |
+| `app_migrations` | name, applied_at | רישום ה-Migrations שהורצו בכל סביבה |
+
+**קשרים:**
+- מכרז ← מסמכים, דרישות, מועדים, משימות וסעיפים בעייתיים (1:N, מחיקה מדורגת).
+- משימה ← תזכורות (1:N).
+- משימה → איש צוות (N:1, אופציונלי).
+- משימה → מועד (N:1, אופציונלי).
+
+**כללים:**
+- "באיחור" מחושב בתצוגה (`due_at < now()` ו-`is_done = false`), ולא נשמר.
+- "זכינו" מוצג בסימון בולט לפי `status = 'won'`.
+- "ארכיון" (`not_bidding`) ו"הוגשו" (`submitted`, `won`, `lost`, לפי `department`) הם תצוגות מסוננות, ולא טבלאות נפרדות.
+- `is_manual = true` מסמן פריט שהמשתמשת יצרה או ערכה. ניתוח מחדש לא דורס פריט כזה.
+- כל הזמנים נשמרים ב-UTC (`timestamptz`), ומוצגים ומחושבים לפי `Asia/Jerusalem`.
+
+### APIs ואינטגרציות
+
+**Route Handlers:**
+
+| Endpoint | תפקיד |
+|---|---|
+| `POST /api/tenders/[id]/analyze` | ניתוח, או ניתוח מחדש, של כל מסמכי המכרז ושמירת התוצאות (`maxDuration = 300`) |
+| `GET /api/tenders/[id]/export/docx` | יצירת קובץ Word של הסיכום |
+| `POST /api/tenders/[id]/email` | שליחת הסיכום, או חלקים נבחרים ממנו, לנמען |
+| `POST /api/cron/reminders` | שליחת התזכורות שהגיע זמנן. מאומת בכותרת `Authorization: Bearer <CRON_SECRET>` |
+
+כל Endpoint, חוץ מ-`cron`, מאמת שהבקשה מגיעה ממשתמשת מחוברת.
+
+**Claude API:**
+- הקבצים מועלים ל-Files API של Anthropic. PDF נשלח כמו שהוא, ו-Word ו-Excel כטקסט אחרי המרה. אחר כך נשלחת בקשה אחת עם כל המסמכים, כדי שאפשר יהיה לזהות סתירות בין מסמכים. אחרי הניתוח הקבצים נמחקים מ-Anthropic.
+- התשובה נדרשת כ-JSON במבנה קבוע (Structured Outputs): `requirements[]`, `deadlines[]`, `tasks[]`, `issues[]`. כל פריט כולל עמוד וסעיף במקור.
+- הבקשה מתבצעת ב-Streaming, כדי למנוע ניתוק בבקשה ארוכה.
+- מגבלות: עד 600 עמודים ל-PDF. העלאה ל-Files API עוקפת את מגבלת 32MB לבקשה.
+
+**Gmail SMTP:** ‏`smtp.gmail.com`, פורט 465 (SSL), עם `GMAIL_USER` ו-`GMAIL_APP_PASSWORD`. דורש אימות דו-שלבי בחשבון.
+
+**Supabase:** ספריית `@supabase/supabase-js` ו-`@supabase/ssr`, לניהול ההתחברות ב-Next.js.
+
+### Data Flow
+
+**העלאה וניתוח:**
+1. המשתמשת יוצרת מכרז (שם ומחלקה). המכרז נשמר בסטטוס `reviewing`.
+2. הקבצים עולים **ישירות מהדפדפן ל-Supabase Storage**, ולא דרך Vercel. כך נעקפת מגבלת גודל הבקשה של Vercel. המגבלה היא 50MB לקובץ.
+3. הדפדפן קורא ל-`/analyze`. השרת מסמן `analysis_status = running`, והממשק מציג חיווי התקדמות.
+4. השרת שולף את הקבצים, ממיר Word ו-Excel, שולח את הכול ל-Claude ומקבל JSON.
+5. **ניתוח ראשון:** הפריטים נשמרים. **ניתוח חוזר:** פריטים עם `is_manual` לא נדרסים. פריטים חדשים או שהשתנו מוחזרים לממשק, ומשולבים רק אחרי אישור המשתמשת.
+6. `analysis_status = done`. אם קובץ לא נקרא, נשמר `read_warning`, והניתוח ממשיך עם שאר הקבצים.
+
+**תזכורות:**
+1. Trigger ב-Database יוצר, מבטל או מתזמן מחדש רשומות `reminders` בכל שינוי במשימה (מועד, אחראי, "בוצע", "עם תזכורת") ובכל שינוי בסטטוס המכרז. הכללים:
+
+   | סוג משימה | תזכורות לאחראי המשימה |
+   |---|---|
+   | `submission` | 24 שעות לפני, 3 שעות לפני |
+   | `bidders_meeting` | 3 ימים לפני, ובנוסף `followup` יום לפני |
+   | `clarification_questions` | 24 שעות לפני |
+   | `closing_meeting` | 3 ימים לפני, ובנוסף `followup` יום לפני |
+   | `other` / `regular` | אין תזכורת לאחראי. אם `remind_me`, נשלחת תזכורת `self` למשתמשת ב-`remind_at` |
+
+   - תזכורת שזמנה כבר עבר לא נוצרת.
+   - סימון "בוצע", הסרת אחראי, או מעבר המכרז ל-`not_bidding` או ל-`submitted` מבטלים את התזכורות הפתוחות (`cancelled`).
+   - ביטול "בוצע" או שינוי מועד מתזמנים אותן מחדש.
+2. כל 15 דקות `pg_cron` שולח, דרך `pg_net`, בקשה ל-`/api/cron/reminders`.
+3. השרת שולף תזכורות `pending` שזמנן הגיע ושהמשימה שלהן לא בוצעה. הוא שולח אותן ב-Gmail ומסמן `sent`. אם השליחה נכשלה, הוא מסמן `failed` ושומר את השגיאה.
+4. הממשק מציג למשתמשת התראה על תזכורות שנכשלו.
+
+**ייצוא ושליחה:**
+- **Word:** השרת בונה קובץ ‎`.docx` מהנתונים השמורים.
+- **PDF:** עמוד הדפסה בדפדפן, ושמירה כ-PDF.
+- **מייל:** השרת בונה מייל HTML (RTL) עם החלקים שנבחרו, ושולח אותו לנמען מרשימת אנשי הצוות או לכתובת שהוזנה.
+
+### Authentication, Authorization, אבטחה ופרטיות
+- **Authentication:** Supabase Auth עם מייל וסיסמה. המשתמשת נוצרת ידנית בלוח הבקרה של Supabase, וההרשמה הציבורית כבויה (`Allow new users to sign up = off`). Session נשמר ב-Cookies דרך `@supabase/ssr`.
+- **Authorization:** משתמשת אחת. RLS מופעל על כל הטבלאות, עם מדיניות שמאפשרת גישה רק ל-`authenticated`. Bucket ה-Storage פרטי, עם אותה מדיניות.
+- **סודות:** `ANTHROPIC_API_KEY`, `GMAIL_APP_PASSWORD`, `SUPABASE_SERVICE_ROLE_KEY` ו-`CRON_SECRET` קיימים רק בצד השרת: ב-`.env` המקומי וב-Environment Variables של Vercel. הם לעולם לא נשלחים לדפדפן ולא נשמרים ב-GitHub (`.env` נמצא ב-`.gitignore`).
+- **פרטיות ה-AI:** ל-Claude נשלחים **רק מסמכי המכרז הפומביים**. שמות, מיילים, החלטות והערות של הארגון לא נשלחים ל-AI. Anthropic לא מאמנת מודלים על מידע מה-API. הקבצים נמחקים מ-Files API אחרי כל ניתוח.
+- **Endpoint התזכורות** מאומת בסוד משותף, כך שאי אפשר להפעיל אותו מבחוץ.
+
+### תשתיות, Hosting, Deployment ו-Configuration
+
+**GitHub, ‏Build ו-Deployment:**
+- הקוד נשמר ב-Repository ב-GitHub. פרויקט Vercel מחובר ל-Repository.
+- כל Push לענף `main` מפעיל Build (`next build`) ופריסה אוטומטית ל-Production. אין פריסה ידנית.
+
+**שתי סביבות:**
+
+| | Development | Production |
+|---|---|---|
+| פרויקט Supabase | `tenders-dev` | `tenders-prod` |
+| איפה רצה האפליקציה | המחשב המקומי (`npm run dev`) | Vercel |
+| איפה נשמרים פרטי הגישה | `.env` במחשב המקומי | Environment Variables ב-Vercel בלבד |
+| חשבון Gmail ומפתח Claude | אותם החשבונות. מומלץ לשלוח תזכורות בדיקה רק לכתובות של המשתמשת | |
+| Cron תזכורות | כבוי. בודקים בהפעלה ידנית של ה-Endpoint | פעיל כל 15 דקות |
+
+המחשב המקומי מחובר ל-Development בלבד. אין הרצה מקומית של Supabase ואין Docker. כל הפיתוח נעשה מול פרויקט ה-Development בענן.
+
+**חיבור ל-Database:** האפליקציה מתחברת דרך `NEXT_PUBLIC_SUPABASE_URL` ו-`NEXT_PUBLIC_SUPABASE_ANON_KEY` (גישה מוגבלת ב-RLS), ובצד השרת גם דרך `SUPABASE_SERVICE_ROLE_KEY`. ה-Service Role משמש למשל את Endpoint התזכורות. הרצת Migrations על Development נעשית דרך `SUPABASE_DB_URL`, שקיים רק ב-`.env` המקומי.
+
+**נוהל Database Migrations:**
+1. כל שינוי במבנה ה-Database נכתב כקובץ SQL חדש ב-`supabase/migrations/`, עם שם שמתחיל בתאריך. בסוף כל קובץ נרשמת שורה ב-`app_migrations`.
+2. **Development:** ‏Claude מריץ את הקובץ על פרויקט ה-Development, באמצעות Supabase CLI עם `SUPABASE_DB_URL`, ובודק שהאפליקציה עובדת.
+3. **Production:** לפני ה-Push ל-GitHub, Claude עוצר ומציג למשתמשת אילו Migrations עדיין לא הורצו על Production. ההשוואה נעשית מול `app_migrations` של Production.
+4. אחרי אישור המשתמשת, הקובץ מורץ על Production. המשתמשת מדביקה את ה-SQL ב-SQL Editor של פרויקט ה-Production, לפי הדרכה צעד-אחר-צעד. כך פרטי הגישה של Production לא נשמרים במחשב.
+5. רק אחרי ש-Production עודכן מתבצע ה-Push, וכך הפריסה לא מקדימה את עדכון ה-Database.
+
+**הגדרות שאינן עוברות ב-Migrations, ושיש להגדיר בנפרד בכל פרויקט:**
+- **Auth:** יצירת המשתמשת, כיבוי ההרשמה הציבורית, והגדרת Site URL (‏`http://localhost:3000` ב-Development, כתובת Vercel ב-Production).
+- **הרחבות:** הפעלת `pg_cron` ו-`pg_net`, אם הן לא מופעלות דרך ה-Migration.
+- **Cron Job:** כתובת ה-Endpoint ו-`CRON_SECRET` שונים בכל סביבה, ולכן ה-Job נוצר רק ב-Production, בסקריפט SQL נפרד שאינו ב-Migrations. הסוד נשמר ב-Supabase Vault.
+- **סודות האפליקציה:** ב-`.env` המקומי (Development) וב-Vercel (Production).
+
+**משתני סביבה (שמות בלבד, ב-`.env.example`):**
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `SUPABASE_DB_URL` (מקומי בלבד)
+- `ANTHROPIC_API_KEY`
+- `ANTHROPIC_MODEL` (ברירת מחדל `claude-opus-5-5`)
+- `GMAIL_USER`
+- `GMAIL_APP_PASSWORD`
+- `CRON_SECRET`
+- `APP_URL`
+
+**מגבלות התוכניות החינמיות (נכון לנובמבר 2026):**
+
+| שירות | מגבלה | משמעות בפשטות |
+|---|---|---|
+| Supabase Free | 2 פרויקטים פעילים | בדיוק פיתוח + אמיתי. אי אפשר להחזיק פרויקט חינמי פעיל נוסף באותו חשבון |
+| Supabase Free | השהיה אחרי 7 ימים ללא פעילות | אם המערכת לא בשימוש שבוע, היא "נרדמת". מחזירים אותה בלחיצה, והנתונים נשמרים |
+| Supabase Free | ‏500MB Database, ‏1GB קבצים, ‏50MB לקובץ | מספיק לכמה מאות מכרזים |
+| Vercel Hobby | 300 שניות לפונקציה, Cron פעם ביום, שימוש לא מסחרי | מספיק טכנית. שימוש מסחרי דורש Pro |
+| Gmail | כ-500 נמענים ביום | הרבה מעבר לצורך |
+
+### החלטות טכניות מרכזיות נוספות
+- **אזור זמן:** כל חישובי התזכורות והתצוגה לפי `Asia/Jerusalem`.
+- **בקשת AI אחת לכל מכרז:** כל המסמכים נשלחים יחד, לזיהוי סתירות ולתמונה שלמה.
+- **ניתוח חוזר אינו דורס עריכות ידניות:** פריטים חדשים מוצגים לאישור לפני שילובם.
+- **לוגיקת התזכורות ב-Database (Triggers):** כך התזכורות תמיד מסונכרנות עם מצב המשימה, לא משנה מאיפה בוצע השינוי.
+
+## החלטות מרכזיות (ADRs)
+
+### ADR-1: Claude כשירות ה-AI, כחריג בתשלום
+**הקשר:** לפי ה-PRD, המערכת צריכה לפעול ללא עלות, עם התחייבות לפרטיות מצד ספק ה-AI. מסלולי AI חינמיים עשויים להשתמש במידע לאימון.
+**החלטה:** שימוש ב-Claude API (`claude-opus-5-5`), עם תשלום לפי שימוש ותקרת הוצאה חודשית. ההחלטה התקבלה על ידי המשתמשת ונרשמה ב-PRD.
+**השלכות:** עלות מוערכת של כמה דולרים עד כ-‎$15 בחודש. איכות גבוהה בעברית ותמיכה ב-PDF סרוק. המידע לא משמש לאימון. אפשר לעבור ל-`claude-sonnet-5-5` בשינוי של משתנה סביבה.
+
+### ADR-2: תזמון תזכורות דרך pg_cron ב-Supabase
+**הקשר:** תזכורת "3 שעות לפני" דורשת בדיקה תכופה. ב-Vercel Hobby, Cron רץ פעם ביום, ובדיוק של עד שעה.
+**החלטה:** ‏`pg_cron` + `pg_net` קוראים כל 15 דקות ל-Endpoint מוגן, והוא שולח את התזכורות שהגיע זמנן.
+**השלכות:** חינמי, ודיוק של 15 דקות. הקריאות גם שומרות על פרויקט ה-Production פעיל. דורש הגדרה ידנית ב-Production.
+
+### ADR-3: הרצת Migrations על Production דרך SQL Editor
+**הקשר:** פרטי הגישה של Production לא יישמרו במחשב המקומי, והמשתמשת אינה מתכנתת.
+**החלטה:** Migrations מורצים אוטומטית על Development. על Production המשתמשת מריצה אותם דרך ה-SQL Editor, לפי הדרכה ואחרי אישור, לפני ה-Push. טבלת `app_migrations` מתעדת מה הורץ בכל סביבה.
+**השלכות:** אין סודות של Production במחשב, ויש שליטה מלאה של המשתמשת. הצעד הידני קצר, ומתבצע רק כשיש שינוי במבנה.
+
+### ADR-4: התחלה בתוכנית Vercel Hobby (חינמית)
+**הקשר:** תוכנית Hobby מיועדת לשימוש לא מסחרי. שימוש ארגוני עשוי לחייב תוכנית Pro (כ-‎$20 לחודש). מבחינה טכנית אין הבדל בין התוכניות לצורכי המוצר.
+**החלטה:** מתחילים ב-Hobby, לפי החלטת המשתמשת. אם יידרש, עוברים ל-Pro.
+**השלכות:** אין עלות Hosting בשלב זה. המעבר ל-Pro הוא שינוי בחשבון Vercel בלבד, בלי שינוי קוד.
