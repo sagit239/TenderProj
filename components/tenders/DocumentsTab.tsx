@@ -1,6 +1,7 @@
 "use client";
 
 import { useId, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Sparkles, Trash2, Upload } from "lucide-react";
 import { buttonClasses } from "@/components/ui/Button";
@@ -10,7 +11,7 @@ import { useToast } from "@/components/ui/Toast";
 import { ACCEPTED_EXTENSIONS, FILE_TYPE_LABELS, fileProblem, formatDate } from "@/lib/tenders";
 import { deleteDocument, uploadDocument } from "@/lib/tenders-storage";
 import { isAnalysisRunning, startAnalysis } from "@/lib/analysis";
-import type { DocumentReadState, TenderAnalysis, TenderDocument } from "@/lib/types";
+import type { DocumentReadState, ReanalysisRun, TenderAnalysis, TenderDocument } from "@/lib/types";
 
 type Doc = TenderDocument & DocumentReadState;
 
@@ -19,9 +20,14 @@ type Props = {
   documents: Doc[];
   loadFailed: boolean;
   analysis: TenderAnalysis;
+  // True once an analysis succeeded; the button then runs a re-analysis
+  hasAnalysis: boolean;
+  reports: ReanalysisRun[];
+  // The documents tab URL; a report opens with &report=<run id>
+  documentsHref: string;
 };
 
-export function DocumentsTab({ tenderId, documents, loadFailed, analysis }: Props) {
+export function DocumentsTab({ tenderId, documents, loadFailed, analysis, hasAnalysis, reports, documentsHref }: Props) {
   const router = useRouter();
   const toast = useToast();
   const inputId = useId();
@@ -30,7 +36,7 @@ export function DocumentsTab({ tenderId, documents, loadFailed, analysis }: Prop
   const [starting, setStarting] = useState(false);
   const running = isAnalysisRunning(analysis);
 
-  // Until a first successful analysis; re-analysis replaces this in M4
+  // First analysis, or a re-analysis of all the documents (new items wait for approval)
   async function analyze() {
     setStarting(true);
     const ok = await startAnalysis(tenderId);
@@ -91,17 +97,15 @@ export function DocumentsTab({ tenderId, documents, loadFailed, analysis }: Prop
         {documents.length > 0 && (
           <div className="flex flex-wrap gap-2">
             {uploadButton("העלאת מסמכים נוספים", "secondary")}
-            {analysis.analysis_status !== "done" && (
-              <button
-                type="button"
-                onClick={analyze}
-                disabled={running || starting || progress !== null}
-                className={buttonClasses("accent", "sm")}
-              >
-                <Sparkles size={14} strokeWidth={1.75} aria-hidden />
-                ניתוח המסמכים
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={analyze}
+              disabled={running || starting || progress !== null}
+              className={buttonClasses("accent", "sm")}
+            >
+              <Sparkles size={14} strokeWidth={1.75} aria-hidden />
+              {hasAnalysis ? "ניתוח מחדש" : "ניתוח המסמכים"}
+            </button>
           </div>
         )}
       </div>
@@ -201,6 +205,34 @@ export function DocumentsTab({ tenderId, documents, loadFailed, analysis }: Prop
             ))}
           </ul>
         </>
+      )}
+
+      {reports.length > 0 && (
+        <section aria-labelledby="reports-heading" className="mt-6">
+          <h2 id="reports-heading" className="mb-3 text-h3">
+            דוחות שינויים
+          </h2>
+          <ul className="divide-y divide-line overflow-hidden rounded-table border border-line bg-white">
+            {reports.map((r) => (
+              <li key={r.id}>
+                <Link
+                  href={`${documentsHref}&report=${r.id}`}
+                  scroll={false}
+                  className="flex min-h-11 flex-wrap items-center justify-between gap-2 px-4 py-2.5 hover:bg-surface focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-text"
+                >
+                  <span>
+                    ניתוח מחדש · <span dir="ltr">{formatDate(r.finished_at)}</span>
+                  </span>
+                  {r.pending > 0 && (
+                    <span className="inline-flex h-[22px] items-center rounded-full bg-text px-2.5 text-small font-medium text-white">
+                      {r.pending === 1 ? "אחת ממתינה לאישור" : `${r.pending} ממתינות לאישור`}
+                    </span>
+                  )}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
 
       <ConfirmDeleteDialog

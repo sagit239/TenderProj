@@ -104,3 +104,15 @@ export const RESULT_SCHEMA = {
     }),
   },
 };
+
+// Re-analysis: only new items, plus the short ids of existing items no longer found
+export type AiReanalysisResult = AiResult & { missing_ids: string[] };
+
+export const REANALYSIS_SCHEMA = {
+  ...RESULT_SCHEMA,
+  required: [...RESULT_SCHEMA.required, "missing_ids"],
+  properties: {
+    ...RESULT_SCHEMA.properties,
+    missing_ids: { type: "array", items: { type: "string" } },
+  },
+};

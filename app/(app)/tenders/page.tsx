@@ -2,16 +2,24 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Plus } from "lucide-react";
 import { CardField, DepartmentPills, EmptyState, LoadError, ShowAllLink, tdClass, thClass } from "@/components/tenders/ListParts";
-import { DepartmentTag, StatusBadge } from "@/components/tenders/Tags";
+import { DepartmentTag, OverdueBadge, StatusBadge } from "@/components/tenders/Tags";
 import { buttonClasses } from "@/components/ui/Button";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { formatDue } from "@/lib/analysis";
+import { formatDue, isOverdue } from "@/lib/analysis";
 import { createClient } from "@/lib/db/server";
 import { ACTIVE_STATUSES, isDepartment, tenderHref } from "@/lib/tenders";
 import type { Tender } from "@/lib/types";
 
 type Submission = { due_at: string; has_time: boolean };
-type TenderRow = Tender & { deadlines: Submission[] };
+type TenderRow = Tender & { deadlines: Submission[]; tasks: { due_at: string | null; is_done: boolean }[] };
+
+// Open tasks ("—" when the tender has no tasks) and how many of them are overdue
+function taskCounts(t: TenderRow, now: number) {
+  return {
+    open: t.tasks.length === 0 ? null : t.tasks.filter((x) => !x.is_done).length,
+    overdue: t.tasks.filter((x) => isOverdue(x, now)).length,
+  };
+}
 
 // The earliest submission deadline decides (contradicting dates are flagged as an issue)
 function submissionDate(t: TenderRow) {
@@ -32,13 +40,14 @@ export default async function ActiveTendersPage({
   const supabase = await createClient();
   let query = supabase
     .from("tenders")
-    .select("id, name, department, status, decided_at, submitted_at, created_at, deadlines(due_at, has_time)")
+    .select("id, name, department, status, decided_at, submitted_at, created_at, deadlines(due_at, has_time), tasks(due_at, is_done)")
     .eq("deadlines.type", "submission")
     .in("status", ACTIVE_STATUSES)
     .order("created_at", { ascending: false });
   if (department) query = query.eq("department", department);
   const { data, error } = await query;
   const tenders = (data ?? []) as TenderRow[];
+  const now = new Date().getTime();
 
   const newButton = (
     <Link href="/tenders/new" className={buttonClasses("primary")}>
@@ -101,9 +110,10 @@ export default async function ActiveTendersPage({
                     <td className={tdClass}>
                       {submissionDate(t) ? <span dir="ltr">{submissionDate(t)}</span> : <span className="text-muted">—</span>}
                     </td>
-                    {/* Filled in by tasks (M4) */}
-                    <td className={`${tdClass} text-muted`}>—</td>
-                    <td className={tdClass} />
+                    <td className={tdClass}>{taskCounts(t, now).open ?? <span className="text-muted">—</span>}</td>
+                    <td className={tdClass}>
+                      {taskCounts(t, now).overdue > 0 && <OverdueBadge count={taskCounts(t, now).overdue} />}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -129,6 +139,14 @@ export default async function ActiveTendersPage({
                     {submissionDate(t) && (
                       <CardField label="מועד הגשה">
                         <span dir="ltr">{submissionDate(t)}</span>
+                      </CardField>
+                    )}
+                    {taskCounts(t, now).open !== null && (
+                      <CardField label="משימות פתוחות">{taskCounts(t, now).open}</CardField>
+                    )}
+                    {taskCounts(t, now).overdue > 0 && (
+                      <CardField label="איחורים">
+                        <OverdueBadge count={taskCounts(t, now).overdue} />
                       </CardField>
                     )}
                   </dl>

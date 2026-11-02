@@ -76,7 +76,7 @@ export type IssueCategory =
   | "one_sided"
   | "contradictions";
 
-export type Requirement = { id: string; text: string; sort_order: number };
+export type Requirement = { id: string; text: string; sort_order: number; is_manual: boolean };
 
 export type Deadline = {
   id: string;
@@ -89,13 +89,20 @@ export type Deadline = {
   is_auto: boolean;
 };
 
+export type TaskType = DeadlineType | "regular";
+
 export type Task = {
   id: string;
+  deadline_id: string | null;
   title: string;
-  type: DeadlineType | "regular";
+  type: TaskType;
   due_at: string | null;
   has_time: boolean;
+  is_done: boolean;
+  remind_at: string | null;
+  is_manual: boolean;
   sort_order: number;
+  assignee_ids: string[];
 };
 
 export type Issue = {
@@ -105,4 +112,35 @@ export type Issue = {
   explanation: string;
   source_refs: SourceRef[];
   suggested_question: string;
+  is_manual: boolean;
+  sort_order: number;
+};
+
+export type ItemType = "requirement" | "deadline" | "task" | "issue";
+
+export type ProposalStatus = "pending" | "accepted" | "rejected";
+
+// Payload is the item as the AI returned it (see lib/ai/schema.ts)
+export type AnalysisProposal = {
+  id: string;
+  run_id: string;
+  item_type: ItemType;
+  payload: Record<string, unknown>;
+  status: ProposalStatus;
+  sort_order: number;
+};
+
+export type MissingItem = { item_type: ItemType; item_id: string; label: string };
+
+export type ChangeReport = {
+  added: { requirements: number; deadlines: number; tasks: number; issues: number };
+  missing: MissingItem[];
+};
+
+// A finished re-analysis, listed under "דוחות שינויים"
+export type ReanalysisRun = {
+  id: string;
+  finished_at: string;
+  change_report: ChangeReport | null;
+  pending: number;
 };

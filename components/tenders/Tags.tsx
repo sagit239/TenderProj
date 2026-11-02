@@ -60,3 +60,15 @@ export function ReadBadge({ doc }: { doc: DocumentReadState }) {
     </span>
   );
 }
+
+// "● באיחור" or "● 2 באיחור": red on Red Tint
+export function OverdueBadge({ count, className = "" }: { count?: number; className?: string }) {
+  return (
+    <span
+      className={`inline-flex h-[22px] items-center rounded-full bg-accent-tint px-2.5 text-small font-medium whitespace-nowrap text-accent ${className}`}
+    >
+      <span aria-hidden>●&nbsp;</span>
+      {count ? `${count} באיחור` : "באיחור"}
+    </span>
+  );
+}

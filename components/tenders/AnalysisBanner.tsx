@@ -38,11 +38,28 @@ export function AnalysisBanner({ tenderId, analysis, hasReadWarnings, documentsH
         .single();
       if (!data) return;
       const now = data as TenderAnalysis;
-      if (now.analysis_status === "done") toast("הניתוח הסתיים");
-      if (!isAnalysisRunning(now)) router.refresh();
+      if (isAnalysisRunning(now)) return;
+      clearInterval(timer);
+      if (now.analysis_status === "done") {
+        toast("הניתוח הסתיים");
+        // A finished re-analysis opens its results for approval
+        const { data: run } = await supabase
+          .from("analysis_runs")
+          .select("id, is_reanalysis")
+          .eq("tender_id", tenderId)
+          .eq("status", "done")
+          .order("finished_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (run?.is_reanalysis) {
+          router.push(`${documentsHref}&report=${run.id}`, { scroll: false });
+          return;
+        }
+      }
+      router.refresh();
     }, POLL_MS);
     return () => clearInterval(timer);
-  }, [running, tenderId, router, toast]);
+  }, [running, tenderId, router, toast, documentsHref]);
 
   async function retry() {
     setRetrying(true);

@@ -1,17 +1,27 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { AnalysisBanner } from "@/components/tenders/AnalysisBanner";
-import { EmptyCard, IssuesTab, RequirementsTab, TasksTab, TimelineTab } from "@/components/tenders/AnalysisTabs";
 import { DocumentsTab } from "@/components/tenders/DocumentsTab";
+import { IssuesTab } from "@/components/tenders/IssuesTab";
+import { ReanalysisDialog } from "@/components/tenders/ReanalysisDialog";
+import { RequirementsTab } from "@/components/tenders/RequirementsTab";
+import { ScrollToItem } from "@/components/tenders/ScrollToItem";
+import { EmptyCard } from "@/components/tenders/TabParts";
+import { TasksTab } from "@/components/tenders/TasksTab";
 import { TenderHeader } from "@/components/tenders/TenderHeader";
+import { TimelineTab } from "@/components/tenders/TimelineTab";
 import { Tabs } from "@/components/ui/Tabs";
 import { createClient } from "@/lib/db/server";
-import { isTenderList, listForStatus, tenderHref } from "@/lib/tenders";
+import { isTenderList, listForStatus, tenderHref, type TenderList } from "@/lib/tenders";
 import { isAnalysisRunning } from "@/lib/analysis";
 import type {
+  AnalysisProposal,
+  ChangeReport,
   Deadline,
   DocumentReadState,
   Issue,
+  ItemType,
+  ReanalysisRun,
   Requirement,
   Task,
   Tender,
@@ -29,7 +39,24 @@ const TABS = [
   { key: "documents", label: "מסמכים", heading: "מסמכי המכרז" },
 ];
 
+// The tab and table of each item type, for "מעבר לפריט"
+const ITEM_PLACES: Record<ItemType, { tab: string; table: string }> = {
+  requirement: { tab: "summary", table: "requirements" },
+  deadline: { tab: "timeline", table: "deadlines" },
+  task: { tab: "tasks", table: "tasks" },
+  issue: { tab: "issues", table: "issues" },
+};
+
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+type Run = {
+  id: string;
+  status: string;
+  is_reanalysis: boolean;
+  finished_at: string | null;
+  change_report: ChangeReport | null;
+  analysis_proposals: { status: string }[];
+};
 
 export default async function TenderPage({
   params,
@@ -43,7 +70,7 @@ export default async function TenderPage({
   if (!UUID.test(id)) notFound();
 
   const supabase = await createClient();
-  const [tenderResult, docsResult] = await Promise.all([
+  const [tenderResult, docsResult, runsResult] = await Promise.all([
     supabase
       .from("tenders")
       .select("id, name, department, status, decided_at, submitted_at, created_at, analysis_status, analysis_started_at")
@@ -54,16 +81,37 @@ export default async function TenderPage({
       .select("id, tender_id, file_name, storage_path, file_type, created_at, read_warning, read_note, analyzed_at")
       .eq("tender_id", id)
       .order("created_at"),
+    supabase
+      .from("analysis_runs")
+      .select("id, status, is_reanalysis, finished_at, change_report, analysis_proposals(status)")
+      .eq("tender_id", id)
+      .eq("status", "done")
+      .order("finished_at", { ascending: false }),
   ]);
   if (tenderResult.error) throw new Error("Could not load the tender");
   if (!tenderResult.data) notFound();
 
   const tender = tenderResult.data as Tender & TenderAnalysis;
   const documents = (docsResult.data ?? []) as (TenderDocument & DocumentReadState)[];
+  const runs = (runsResult.data ?? []) as Run[];
+  // Results stay visible during and after a re-analysis, once any analysis succeeded
+  const hasAnalysis = runs.length > 0;
   // Breadcrumb goes back to the list the user came from; without it, the tender's current list
   const from = isTenderList(query.from) ? query.from : listForStatus(tender.status);
   const tab = TABS.find((t) => t.key === query.tab) ?? TABS[0];
-  const content = tab.key === "documents" ? null : await loadTab(supabase, tender, tab.key);
+  const documentsHref = tenderHref(tender.id, from, "documents");
+  const reports: ReanalysisRun[] = runs
+    .filter((r) => r.is_reanalysis)
+    .map((r) => ({
+      id: r.id,
+      finished_at: r.finished_at!,
+      change_report: r.change_report,
+      pending: r.analysis_proposals.filter((p) => p.status === "pending").length,
+    }));
+  const report = reports.find((r) => r.id === query.report);
+
+  const content =
+    tab.key === "documents" ? null : hasAnalysis ? await loadTab(supabase, tender.id, tab.key) : emptyTab(tender, tab.heading);
 
   return (
     <>
@@ -77,7 +125,7 @@ export default async function TenderPage({
         tenderId={tender.id}
         analysis={tender}
         hasReadWarnings={documents.some((d) => d.read_warning !== null)}
-        documentsHref={tenderHref(tender.id, from, "documents")}
+        documentsHref={documentsHref}
       />
       {tab.key === "documents" ? (
         <DocumentsTab
@@ -85,9 +133,21 @@ export default async function TenderPage({
           documents={documents}
           loadFailed={Boolean(docsResult.error)}
           analysis={tender}
+          hasAnalysis={hasAnalysis}
+          reports={reports}
+          documentsHref={documentsHref}
         />
       ) : (
         content
+      )}
+      <ScrollToItem key={tab.key} />
+      {report && (
+        <ReanalysisDialog
+          key={report.id}
+          run={report}
+          {...await loadReport(supabase, report, tender.id, from)}
+          closeHref={tenderHref(tender.id, from, tab.key)}
+        />
       )}
     </>
   );
@@ -95,56 +155,86 @@ export default async function TenderPage({
 
 type Supabase = Awaited<ReturnType<typeof createClient>>;
 
-// Fetches only what the active tab shows
-async function loadTab(supabase: Supabase, tender: Tender & TenderAnalysis, tab: string) {
-  const heading = TABS.find((t) => t.key === tab)!.heading;
-  if (tender.analysis_status !== "done") {
-    const text = isAnalysisRunning(tender)
-      ? "הניתוח עדיין רץ. התוכן יופיע כאן כשהוא יסתיים."
-      : "עדיין אין תוכן. הוא יופיע כאן אחרי ניתוח המכרז.";
-    return (
-      <section aria-labelledby="tab-heading">
-        <h2 id="tab-heading" className="mb-3 text-h3">
-          {heading}
-        </h2>
-        <EmptyCard text={text} />
-      </section>
-    );
-  }
+function emptyTab(tender: TenderAnalysis, heading: string) {
+  const text = isAnalysisRunning(tender)
+    ? "הניתוח עדיין רץ. התוכן יופיע כאן כשהוא יסתיים."
+    : "עדיין אין תוכן. הוא יופיע כאן אחרי ניתוח המכרז.";
+  return (
+    <section aria-labelledby="tab-heading">
+      <h2 id="tab-heading" className="mb-3 text-h3">
+        {heading}
+      </h2>
+      <EmptyCard text={text} />
+    </section>
+  );
+}
 
+// Fetches only what the active tab shows
+async function loadTab(supabase: Supabase, tenderId: string, tab: string) {
   if (tab === "timeline") {
     const { data, error } = await supabase
       .from("deadlines")
       .select("id, type, title, due_at, has_time, source_refs, is_manual, is_auto")
-      .eq("tender_id", tender.id)
+      .eq("tender_id", tenderId)
       .order("due_at");
     if (error) throw new Error("Could not load deadlines");
-    return <TimelineTab items={data as Deadline[]} />;
+    return <TimelineTab tenderId={tenderId} items={data as Deadline[]} />;
   }
   if (tab === "tasks") {
-    const { data, error } = await supabase
-      .from("tasks")
-      .select("id, title, type, due_at, has_time, sort_order")
-      .eq("tender_id", tender.id)
-      .order("due_at", { nullsFirst: false })
-      .order("sort_order");
-    if (error) throw new Error("Could not load tasks");
-    return <TasksTab items={data as Task[]} />;
+    const [tasks, members, deadlines] = await Promise.all([
+      supabase
+        .from("tasks")
+        .select("id, deadline_id, title, type, due_at, has_time, is_done, remind_at, is_manual, sort_order, task_assignees(team_member_id)")
+        .eq("tender_id", tenderId)
+        .order("due_at", { nullsFirst: false })
+        .order("sort_order"),
+      supabase.from("team_members").select("id, name").order("name"),
+      supabase.from("deadlines").select("id, title").eq("tender_id", tenderId),
+    ]);
+    if (tasks.error || members.error || deadlines.error) throw new Error("Could not load tasks");
+    const items = (tasks.data as (Omit<Task, "assignee_ids"> & { task_assignees: { team_member_id: string }[] })[]).map(
+      ({ task_assignees, ...t }) => ({ ...t, assignee_ids: task_assignees.map((a) => a.team_member_id) }),
+    );
+    return <TasksTab tenderId={tenderId} items={items} members={members.data} deadlines={deadlines.data} />;
   }
   if (tab === "issues") {
     const { data, error } = await supabase
       .from("issues")
-      .select("id, category, title, explanation, source_refs, suggested_question")
-      .eq("tender_id", tender.id)
+      .select("id, category, title, explanation, source_refs, suggested_question, is_manual, sort_order")
+      .eq("tender_id", tenderId)
       .order("sort_order");
     if (error) throw new Error("Could not load issues");
-    return <IssuesTab items={data as Issue[]} />;
+    return <IssuesTab tenderId={tenderId} items={data as Issue[]} />;
   }
   const { data, error } = await supabase
     .from("requirements")
-    .select("id, text, sort_order")
-    .eq("tender_id", tender.id)
+    .select("id, text, sort_order, is_manual")
+    .eq("tender_id", tenderId)
     .order("sort_order");
   if (error) throw new Error("Could not load requirements");
-  return <RequirementsTab items={data as Requirement[]} />;
+  return <RequirementsTab tenderId={tenderId} items={data as Requirement[]} />;
+}
+
+// The run's proposals, and links to the "not found again" items that still exist
+async function loadReport(supabase: Supabase, report: ReanalysisRun, tenderId: string, from: TenderList) {
+  const { data, error } = await supabase
+    .from("analysis_proposals")
+    .select("id, run_id, item_type, payload, status, sort_order")
+    .eq("run_id", report.id)
+    .order("sort_order");
+  if (error) throw new Error("Could not load the change report");
+
+  const missing = report.change_report?.missing ?? [];
+  const itemHrefs: Record<string, string> = {};
+  await Promise.all(
+    (Object.keys(ITEM_PLACES) as ItemType[]).map(async (type) => {
+      const ids = missing.filter((m) => m.item_type === type).map((m) => m.item_id);
+      if (ids.length === 0) return;
+      const { data: found } = await supabase.from(ITEM_PLACES[type].table).select("id").in("id", ids);
+      for (const row of (found ?? []) as { id: string }[]) {
+        itemHrefs[row.id] = `${tenderHref(tenderId, from, ITEM_PLACES[type].tab)}#item-${row.id}`;
+      }
+    }),
+  );
+  return { proposals: data as AnalysisProposal[], itemHrefs };
 }

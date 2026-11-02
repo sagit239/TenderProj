@@ -2,15 +2,16 @@
 import OpenAI, { toFile } from "openai";
 import type { ResponseInputContent } from "openai/resources/responses/responses";
 import type { LoadedFile } from "../files";
-import { SYSTEM_PROMPT } from "./prompt";
-import { RESULT_SCHEMA, type AiResult } from "./schema";
+import { REANALYSIS_PROMPT, SYSTEM_PROMPT } from "./prompt";
+import { REANALYSIS_SCHEMA, RESULT_SCHEMA, type AiReanalysisResult } from "./schema";
 
 export const DEFAULT_MODEL = "gpt-6.1-sol";
 const TIMEOUT_MS = 280_000;
 const MAX_OUTPUT_TOKENS = 32_000;
 
 export type AnalysisOutput = {
-  result: AiResult;
+  // missing_ids is filled only on a re-analysis
+  result: AiReanalysisResult;
   model: string;
   inputTokens: number;
   outputTokens: number;
@@ -18,7 +19,8 @@ export type AnalysisOutput = {
 
 type ReadableFile = Extract<LoadedFile, { ok: true }>;
 
-export async function analyzeTender(files: ReadableFile[]): Promise<AnalysisOutput> {
+// existing: on a re-analysis, the text list of the items the tender already has
+export async function analyzeTender(files: ReadableFile[], existing?: string): Promise<AnalysisOutput> {
   if (files.length === 0) throw new Error("No readable files to analyze");
 
   const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
@@ -49,15 +51,26 @@ export async function analyzeTender(files: ReadableFile[]): Promise<AnalysisOutp
         content.push({ type: "input_text", text: file.text });
       }
     }
+    if (existing !== undefined) {
+      content.push({ type: "input_text", text: `=== הפריטים שכבר קיימים במכרז ===
+${existing || "(אין)"}` });
+    }
 
     const stream = client.responses.stream(
       {
         model,
-        instructions: SYSTEM_PROMPT,
+        instructions: existing === undefined ? SYSTEM_PROMPT : `${SYSTEM_PROMPT}
+
+${REANALYSIS_PROMPT}`,
         input: [{ role: "user", content }],
         max_output_tokens: MAX_OUTPUT_TOKENS,
         text: {
-          format: { type: "json_schema", name: "tender_analysis", schema: RESULT_SCHEMA, strict: true },
+          format: {
+            type: "json_schema",
+            name: "tender_analysis",
+            schema: existing === undefined ? RESULT_SCHEMA : REANALYSIS_SCHEMA,
+            strict: true,
+          },
         },
       },
       { signal: abort.signal },
@@ -68,7 +81,7 @@ export async function analyzeTender(files: ReadableFile[]): Promise<AnalysisOutp
       throw new Error(`Response ${response.status}: ${response.incomplete_details?.reason ?? "unknown"}`);
     }
     return {
-      result: JSON.parse(response.output_text) as AiResult,
+      result: { missing_ids: [], ...(JSON.parse(response.output_text) as Partial<AiReanalysisResult>) } as AiReanalysisResult,
       model: response.model,
       inputTokens: response.usage?.input_tokens ?? 0,
       outputTokens: response.usage?.output_tokens ?? 0,
