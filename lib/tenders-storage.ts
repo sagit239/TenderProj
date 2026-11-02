@@ -1,8 +1,6 @@
 import { createClient } from "@/lib/db/client";
-import { fileTypeFromName, storagePath } from "@/lib/tenders";
+import { BUCKET, fileTypeFromName, storagePath } from "@/lib/tenders";
 import type { TenderDocument } from "@/lib/types";
-
-export const BUCKET = "tender-files";
 
 // Uploads straight from the browser to Storage, then records the file in tender_documents
 export async function uploadDocument(tenderId: string, file: File): Promise<boolean> {

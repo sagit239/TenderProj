@@ -10,6 +10,7 @@ import { useToast } from "@/components/ui/Toast";
 import { createClient } from "@/lib/db/client";
 import { DEPARTMENTS, fileProblem, formatFileSize, tenderHref } from "@/lib/tenders";
 import { uploadDocument } from "@/lib/tenders-storage";
+import { startAnalysis } from "@/lib/analysis";
 import type { Department } from "@/lib/types";
 import { FileDropzone } from "./FileDropzone";
 
@@ -75,6 +76,12 @@ export function NewTenderForm() {
       setProgress(`מעלה קבצים… (${i + 1} מתוך ${files.length})`);
       const ok = await uploadDocument(data.id, files[i]);
       if (!ok) failed.push(files[i].name);
+    }
+
+    // Analysis starts as soon as there is something to read; it runs in the background
+    if (failed.length < files.length) {
+      setProgress("מתחילה את ניתוח המסמכים…");
+      await startAnalysis(data.id);
     }
 
     if (failed.length > 0) {

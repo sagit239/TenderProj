@@ -5,9 +5,19 @@ import { CardField, DepartmentPills, EmptyState, LoadError, ShowAllLink, tdClass
 import { DepartmentTag, StatusBadge } from "@/components/tenders/Tags";
 import { buttonClasses } from "@/components/ui/Button";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { formatDue } from "@/lib/analysis";
 import { createClient } from "@/lib/db/server";
 import { ACTIVE_STATUSES, isDepartment, tenderHref } from "@/lib/tenders";
 import type { Tender } from "@/lib/types";
+
+type Submission = { due_at: string; has_time: boolean };
+type TenderRow = Tender & { deadlines: Submission[] };
+
+// The earliest submission deadline decides (contradicting dates are flagged as an issue)
+function submissionDate(t: TenderRow) {
+  const first = [...t.deadlines].sort((a, b) => a.due_at.localeCompare(b.due_at))[0];
+  return first ? formatDue(first.due_at, first.has_time) : null;
+}
 
 export const metadata: Metadata = { title: "מכרזים פעילים · ניהול מכרזים" };
 
@@ -22,12 +32,13 @@ export default async function ActiveTendersPage({
   const supabase = await createClient();
   let query = supabase
     .from("tenders")
-    .select("id, name, department, status, decided_at, submitted_at, created_at")
+    .select("id, name, department, status, decided_at, submitted_at, created_at, deadlines(due_at, has_time)")
+    .eq("deadlines.type", "submission")
     .in("status", ACTIVE_STATUSES)
     .order("created_at", { ascending: false });
   if (department) query = query.eq("department", department);
   const { data, error } = await query;
-  const tenders = (data ?? []) as Tender[];
+  const tenders = (data ?? []) as TenderRow[];
 
   const newButton = (
     <Link href="/tenders/new" className={buttonClasses("primary")}>
@@ -87,8 +98,10 @@ export default async function ActiveTendersPage({
                     <td className={tdClass}>
                       <StatusBadge status={t.status} />
                     </td>
-                    {/* Filled in by the analysis (M3) and tasks (M4) */}
-                    <td className={`${tdClass} text-muted`}>—</td>
+                    <td className={tdClass}>
+                      {submissionDate(t) ? <span dir="ltr">{submissionDate(t)}</span> : <span className="text-muted">—</span>}
+                    </td>
+                    {/* Filled in by tasks (M4) */}
                     <td className={`${tdClass} text-muted`}>—</td>
                     <td className={tdClass} />
                   </tr>
@@ -113,6 +126,11 @@ export default async function ActiveTendersPage({
                     <CardField label="סטטוס">
                       <StatusBadge status={t.status} />
                     </CardField>
+                    {submissionDate(t) && (
+                      <CardField label="מועד הגשה">
+                        <span dir="ltr">{submissionDate(t)}</span>
+                      </CardField>
+                    )}
                   </dl>
                 </Link>
               </li>

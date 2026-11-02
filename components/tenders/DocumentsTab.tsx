@@ -2,26 +2,42 @@
 
 import { useId, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Trash2, Upload } from "lucide-react";
+import { Sparkles, Trash2, Upload } from "lucide-react";
 import { buttonClasses } from "@/components/ui/Button";
+import { ReadBadge } from "@/components/tenders/Tags";
 import { ConfirmDeleteDialog } from "@/components/ui/ConfirmDeleteDialog";
 import { useToast } from "@/components/ui/Toast";
 import { ACCEPTED_EXTENSIONS, FILE_TYPE_LABELS, fileProblem, formatDate } from "@/lib/tenders";
 import { deleteDocument, uploadDocument } from "@/lib/tenders-storage";
-import type { TenderDocument } from "@/lib/types";
+import { isAnalysisRunning, startAnalysis } from "@/lib/analysis";
+import type { DocumentReadState, TenderAnalysis, TenderDocument } from "@/lib/types";
+
+type Doc = TenderDocument & DocumentReadState;
 
 type Props = {
   tenderId: string;
-  documents: TenderDocument[];
+  documents: Doc[];
   loadFailed: boolean;
+  analysis: TenderAnalysis;
 };
 
-export function DocumentsTab({ tenderId, documents, loadFailed }: Props) {
+export function DocumentsTab({ tenderId, documents, loadFailed, analysis }: Props) {
   const router = useRouter();
   const toast = useToast();
   const inputId = useId();
   const [progress, setProgress] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<TenderDocument | null>(null);
+  const [starting, setStarting] = useState(false);
+  const running = isAnalysisRunning(analysis);
+
+  // Until a first successful analysis; re-analysis replaces this in M4
+  async function analyze() {
+    setStarting(true);
+    const ok = await startAnalysis(tenderId);
+    setStarting(false);
+    if (!ok) toast("לא הצלחנו להפעיל את הניתוח. אפשר לנסות שוב.", "error");
+    router.refresh();
+  }
 
   async function upload(selected: File[]) {
     const problems = selected.map(fileProblem).filter((p): p is string => p !== null);
@@ -72,7 +88,22 @@ export function DocumentsTab({ tenderId, documents, loadFailed }: Props) {
         <h2 id="documents-heading" className="text-h3">
           מסמכי המכרז
         </h2>
-        {documents.length > 0 && uploadButton("העלאת מסמכים נוספים", "secondary")}
+        {documents.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {uploadButton("העלאת מסמכים נוספים", "secondary")}
+            {analysis.analysis_status !== "done" && (
+              <button
+                type="button"
+                onClick={analyze}
+                disabled={running || starting || progress !== null}
+                className={buttonClasses("accent", "sm")}
+              >
+                <Sparkles size={14} strokeWidth={1.75} aria-hidden />
+                ניתוח המסמכים
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {progress && (
@@ -110,6 +141,7 @@ export function DocumentsTab({ tenderId, documents, loadFailed }: Props) {
                   <th scope="col" className="px-4 py-2.5 text-start font-medium">קובץ</th>
                   <th scope="col" className="px-4 py-2.5 text-start font-medium">סוג</th>
                   <th scope="col" className="px-4 py-2.5 text-start font-medium">הועלה</th>
+                  <th scope="col" className="px-4 py-2.5 text-start font-medium whitespace-nowrap">מצב קריאה</th>
                   <th scope="col" className="w-12 px-2 py-2.5">
                     <span className="sr-only">מחיקה</span>
                   </th>
@@ -120,10 +152,14 @@ export function DocumentsTab({ tenderId, documents, loadFailed }: Props) {
                   <tr key={d.id} className="border-b border-line last:border-b-0">
                     <td className="px-4 py-2">
                       <bdi>{d.file_name}</bdi>
+                      {d.read_note && <p className="text-small text-muted">{d.read_note}</p>}
                     </td>
                     <td className="px-4 py-2">{FILE_TYPE_LABELS[d.file_type]}</td>
                     <td className="px-4 py-2">
                       <span dir="ltr">{formatDate(d.created_at)}</span>
+                    </td>
+                    <td className="px-4 py-2">
+                      <ReadBadge doc={d} />
                     </td>
                     <td className="px-2 py-1 text-end">
                       <DeleteButton doc={d} onClick={setDeleting} />
@@ -142,6 +178,7 @@ export function DocumentsTab({ tenderId, documents, loadFailed }: Props) {
                   <p className="text-h3 break-words">
                     <bdi>{d.file_name}</bdi>
                   </p>
+                  {d.read_note && <p className="text-small text-muted">{d.read_note}</p>}
                   <dl className="mt-1 text-body">
                     <div className="flex gap-1">
                       <dt className="text-muted">סוג:</dt>
@@ -150,6 +187,12 @@ export function DocumentsTab({ tenderId, documents, loadFailed }: Props) {
                     <div className="flex gap-1">
                       <dt className="text-muted">הועלה:</dt>
                       <dd dir="ltr">{formatDate(d.created_at)}</dd>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <dt className="text-muted">מצב קריאה:</dt>
+                      <dd>
+                        <ReadBadge doc={d} />
+                      </dd>
                     </div>
                   </dl>
                 </div>

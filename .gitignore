@@ -80,3 +80,6 @@ desktop.ini
 tmp/
 temp/
 *.tmp
+
+# Sample tender files for AI analysis testing (local only)
+samples/

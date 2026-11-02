@@ -61,6 +61,9 @@ export function tenderHref(id: string, from: TenderList, tab?: string) {
   return `/tenders/${id}?${params}`;
 }
 
+// Private Storage bucket for the original tender files
+export const BUCKET = "tender-files";
+
 // Supported upload formats (F3) and the Storage per-file limit
 export const MAX_FILE_BYTES = 50 * 1024 * 1024;
 export const ACCEPTED_EXTENSIONS = ".pdf,.doc,.docx,.xls,.xlsx";
