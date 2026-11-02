@@ -1,0 +1,91 @@
+@import "tailwindcss";
+
+/* Design tokens from the Style Guide (spec/DESIGN.md) */
+@theme {
+  --color-accent: #a3140f;
+  --color-accent-dark: #7a0e0b;
+  --color-accent-tint: #fbeae9;
+  --color-charcoal: #3a3a3d;
+  --color-slate: #6e6e73;
+  --color-ink: #0e0e10;
+  --color-ink-active: #26262a;
+  --color-text: #1e1e21;
+  --color-muted: #6e6e73;
+  --color-line: #e2e2e5;
+  --color-input-border: #c9c9cd;
+  --color-surface: #f5f5f6;
+  --color-table-head: #fafafb;
+  --color-done: #2f6b4f;
+  --color-warning: #a86a12;
+
+  --radius-tag: 4px;
+  --radius-control: 6px;
+  --radius-table: 10px;
+  --radius-card: 12px;
+
+  --shadow-card: 0 1px 2px rgb(14 14 16 / 0.05);
+  --shadow-dialog: 0 16px 48px rgb(14 14 16 / 0.2), 0 2px 6px rgb(14 14 16 / 0.08);
+
+  --animate-drawer-in: drawer-in 200ms cubic-bezier(0.2, 0, 0, 1);
+  --animate-fade-in: fade-in 150ms ease-out;
+}
+
+@theme inline {
+  --font-sans: var(--font-heebo), Arial, sans-serif;
+}
+
+@keyframes drawer-in {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Typography scale */
+@utility text-display {
+  font-size: 32px;
+  line-height: 40px;
+  font-weight: 800;
+}
+@utility text-h1 {
+  font-size: 24px;
+  line-height: 32px;
+  font-weight: 700;
+}
+@utility text-h2 {
+  font-size: 20px;
+  line-height: 28px;
+  font-weight: 600;
+}
+@utility text-h3 {
+  font-size: 16px;
+  line-height: 24px;
+  font-weight: 600;
+}
+@utility text-body {
+  font-size: 14px;
+  line-height: 22px;
+}
+@utility text-small {
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 500;
+}
+
+body {
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 14px;
+  line-height: 22px;
+}

@@ -57,5 +57,6 @@
 
 ## פקודות הרצה
 > Claude ממלא זאת ברגע שהאפליקציה יכולה לרוץ (בדרך כלל בסיום Milestone 1), ומעדכן אם משהו משתנה.
-- **הרצה (dev):** `<command>`
-- **בדיקות (test):** `<command, או "אין">`
+- **הרצה (dev):** `npm run dev` (ואז http://localhost:3000)
+- **בדיקות (test):** אין (בדיקת תקינות: `npm run lint` ו-`npm run build`)
+- **Migrations (Development):** `npm run db:migrate`

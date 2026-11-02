@@ -100,7 +100,8 @@ Supabase
 
 | טבלה | שדות עיקריים | הערות |
 |---|---|---|
-| `team_members` | id, name, role, email | role: `legal`, `accounting`, `team_manager`, `agent`, `division_manager`, `service_manager` (תוויות בעברית בממשק) |
+| `roles` | key, label, sort_order | רשימת התפקידים. מתחילה עם 6 התפקידים (`legal`, `accounting`, `team_manager`, `agent`, `division_manager`, `service_manager`), ואפשר להוסיף תפקידים מהממשק (ADR-12) |
+| `team_members` | id, name, role, email | role: מפתח מטבלת `roles` |
 | `tenders` | id, name, department, status, decided_at?, submitted_at?, analysis_status, analysis_started_at?, analysis_error, created_at | department: `medical` / `safety`. status: `reviewing`, `preparing`, `not_bidding`, `submitted`, `won`, `lost`. analysis_status: `idle`, `running`, `done`, `failed`. ‏decided_at נשמר במעבר ל-`not_bidding`, ו-submitted_at במעבר ל-`submitted` (ונשאר גם ב-`won` / `lost`) |
 | `tender_documents` | id, tender_id, file_name, storage_path, file_type, read_warning, analyzed_at | read_warning: קובץ שלא נקרא או נקרא חלקית |
 | `requirements` | id, tender_id, text, sort_order, is_manual | פריטי סיכום הדרישות |
@@ -304,3 +305,23 @@ Supabase
 **הקשר:** פרויקט חינמי ב-Supabase מושהה אחרי 7 ימים בלי פעילות. פרויקט Production שנוצר בתחילת הפיתוח היה מושהה חודשים עד הפריסה.
 **החלטה:** ב-Milestone 1 נוצר רק `tenders-dev`. ‏`tenders-prod` נוצר ב-Milestone 7.
 **השלכות:** אין צורך להעיר פרויקט ישן. צריך לוודא שבחשבון נשאר מקום לפרויקט חינמי שני.
+
+### ADR-9: Cache Components כבוי ב-Next.js 16
+**הקשר:** תבנית ה-Next.js 16 מפעילה כברירת מחדל `cacheComponents` ו-`partialPrefetching`. כשהם פעילים, כל קריאה של ה-Session (Cookies) צריכה להיות עטופה ב-`<Suspense>`, ויש בדיקות "ניווט מיידי" נוספות. כמעט כל דף במערכת מוגן ותלוי במשתמשת המחוברת, ואין בו תוכן ציבורי שכדאי לשמור ב-Cache.
+**החלטה:** כיבוי שתי האפשרויות ב-`next.config.ts`. הדפים המוגנים מוצגים מחדש בכל בקשה (Dynamic).
+**השלכות:** קוד פשוט יותר, בלי Suspense סביב כל קריאת Session. ההשפעה על המהירות זניחה למשתמשת יחידה. אפשר להפעיל אותן בעתיד אם יידרש.
+
+### ADR-10: הרצת Migrations על Development דרך `supabase db push --db-url`
+**הקשר:** Claude לא קורא את `.env`, אבל צריך להריץ Migrations על פרויקט ה-Development.
+**החלטה:** הסקריפט `npm run db:migrate` (‏`scripts/db-migrate.mjs`) נטען עם `node --env-file=.env` ומריץ את Supabase CLI (`db push --db-url $SUPABASE_DB_URL`). בסיום הוא מציג את השורות בטבלת `app_migrations`. שמות הקבצים בפורמט `<timestamp>_<name>.sql`.
+**השלכות:** פרטי הגישה לא מוצגים ולא נקראים. ה-CLI מנהל גם רישום משלו (`supabase_migrations.schema_migrations`), בנוסף ל-`app_migrations`, שהוא הרישום שמשמש להשוואה מול Production.
+
+### ADR-11: אייקונים מ-`lucide-react`
+**הקשר:** ה-Style Guide מגדיר אייקונים קוויים, על Grid של 24px, בעובי 1.75px ועם קצוות מעוגלים.
+**החלטה:** שימוש בספריית `lucide-react`, עם `strokeWidth={1.75}`.
+**השלכות:** סגנון אחיד שתואם ל-Style Guide, בלי לצייר אייקונים ידנית.
+
+### ADR-12: תפקידים בטבלה, עם הוספה מהממשק
+**הקשר:** ה-PRD הגדיר 6 תפקידים קבועים. המשתמשת ביקשה אפשרות להוסיף תפקיד חדש בעצמה, בלי מסך נפרד. התפקיד הוא תווית בלבד, ושום לוגיקה במערכת לא תלויה בו.
+**החלטה:** טבלת `roles` (‏key, ‏label, ‏sort_order), עם 6 התפקידים המקוריים באותם מפתחות. ‏`team_members.role` מפנה לטבלה (Foreign Key) במקום בדיקה מול רשימה קבועה. בחלון איש הצוות, האפשרות "+ תפקיד חדש…" פותחת שדה לשם התפקיד, והוא נשמר יחד עם איש הצוות. אם כבר קיים תפקיד באותו שם, משתמשים בו.
+**השלכות:** אין צורך בשינוי קוד כדי להוסיף תפקיד. אין בשלב זה עריכה או מחיקה של תפקידים. אם יידרש, אפשר להוסיף זאת בהמשך.

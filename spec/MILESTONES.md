@@ -16,7 +16,7 @@
 
 ---
 
-## Milestone 1 — הקמה, התחברות ואנשי צוות
+## Milestone 1 — הקמה, התחברות ואנשי צוות ✅
 - **מטרה:** להקים את הפרויקט ואת שתי סביבות Supabase. בסיום אפשר להיכנס למערכת עם סיסמה ולנהל את רשימת אנשי הצוות.
 - **מה יש לממש:**
   - פרויקט Next.js + TypeScript + Tailwind, עם גופן Heebo, צבעי ה-Style Guide כ-Design Tokens, ו-`<html lang="he" dir="rtl">`.
