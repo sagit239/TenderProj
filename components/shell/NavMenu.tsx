@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { Archive, Check, List, Plus, Users, type LucideIcon } from "lucide-react";
 import { buttonClasses } from "@/components/ui/Button";
 
@@ -15,6 +15,13 @@ const NAV_ITEMS: { href: string; label: string; icon: LucideIcon }[] = [
 // "+ New tender" button and the four nav items; shared by the sidebar and the mobile drawer
 export function NavMenu({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
+  const from = useSearchParams().get("from");
+  // Inside a tender screen, highlight the list the user came from
+  const tenderScreen = pathname.startsWith("/tenders/") && pathname !== "/tenders/new";
+  const activeHref =
+    tenderScreen && from === "archive" ? "/archive"
+    : tenderScreen && from === "submitted" ? "/submitted"
+    : null;
 
   return (
     <nav aria-label="תפריט ראשי" className="flex flex-col gap-4 px-3 py-4">
@@ -28,8 +35,9 @@ export function NavMenu({ onNavigate }: { onNavigate?: () => void }) {
       </Link>
       <ul className="flex flex-col gap-1">
         {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
-          const active =
-            href === "/tenders"
+          const active = activeHref
+            ? href === activeHref
+            : href === "/tenders"
               ? pathname === "/tenders" || pathname.startsWith("/tenders/")
               : pathname === href || pathname.startsWith(`${href}/`);
           return (

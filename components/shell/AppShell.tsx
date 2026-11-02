@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Menu, X } from "lucide-react";
 import { NavMenu } from "./NavMenu";
 import { signOut } from "@/app/login/actions";
+import { ToastProvider } from "@/components/ui/Toast";
 
 export function AppShell({ children }: { children: ReactNode }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -64,7 +65,9 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
         </aside>
 
-        <main className="min-w-0 flex-1 p-4 md:p-6">{children}</main>
+        <main className="min-w-0 flex-1 p-4 md:p-6">
+          <ToastProvider>{children}</ToastProvider>
+        </main>
       </div>
 
       {drawerOpen && (
