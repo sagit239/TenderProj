@@ -9,10 +9,12 @@ type DialogProps = {
   title: string;
   children: ReactNode;
   footer?: ReactNode;
+  // For dialogs that hold a table
+  wide?: boolean;
 };
 
 // Modal built on the native <dialog>: focus trap, Esc and focus restore come from the browser
-export function Dialog({ open, onClose, title, children, footer }: DialogProps) {
+export function Dialog({ open, onClose, title, children, footer, wide = false }: DialogProps) {
   const ref = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {
@@ -34,7 +36,7 @@ export function Dialog({ open, onClose, title, children, footer }: DialogProps) 
         // Click on the backdrop closes the dialog
         if (e.target === ref.current) onClose();
       }}
-      className="m-auto w-[calc(100%-16px)] max-w-[480px] max-h-[calc(100dvh-16px)] rounded-card bg-white p-0 text-text shadow-dialog backdrop:bg-ink/50 open:motion-safe:animate-fade-in"
+      className={`m-auto w-[calc(100%-16px)] ${wide ? "max-w-[720px]" : "max-w-[480px]"} max-h-[calc(100dvh-16px)] rounded-card bg-white p-0 text-text shadow-dialog backdrop:bg-ink/50 open:motion-safe:animate-fade-in`}
     >
       {open && (
         <div className="flex max-h-[calc(100dvh-16px)] flex-col">

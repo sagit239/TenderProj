@@ -60,4 +60,5 @@
 - **הרצה (dev):** `npm run dev` (ואז http://localhost:3000)
 - **בדיקות (test):** אין (בדיקת תקינות: `npm run lint` ו-`npm run build`)
 - **Migrations (Development):** `npm run db:migrate`
+- **שליחת התזכורות שהגיע זמנן (הפעלה ידנית, השרת צריך לרוץ):** `npm run reminders:run`
 - **ניתוח ניסיון של קובצי דוגמה (OpenAI):** `npm run ai:trial -- <output.json>` (ברירת מחדל: `samples/` ו-`samples/test/`)

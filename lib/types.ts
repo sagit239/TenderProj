@@ -100,9 +100,20 @@ export type Task = {
   has_time: boolean;
   is_done: boolean;
   remind_at: string | null;
+  // "בלי תזכורת"
+  reminders_off: boolean;
   is_manual: boolean;
   sort_order: number;
   assignee_ids: string[];
+};
+
+// A reminder that failed to send and is not yet marked as handled ("תזכורות שלא נשלחו")
+export type FailedReminder = {
+  id: string;
+  tender_name: string;
+  task_title: string;
+  recipient_email: string | null;
+  error: string | null;
 };
 
 export type Issue = {

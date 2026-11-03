@@ -1,6 +1,8 @@
 "use client";
 
 import { useActionState } from "react";
+import Link from "next/link";
+import { authLinkClass } from "@/components/auth/AuthCard";
 import { signIn, type SignInState } from "./actions";
 import { Field, Input } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
@@ -38,6 +40,11 @@ export function LoginForm() {
       <Button type="submit" variant="accent" disabled={pending} className="mt-2 w-full">
         {pending ? "מתחברת…" : "כניסה"}
       </Button>
+      <div className="-mt-1 text-center">
+        <Link href="/forgot-password" className={authLinkClass}>
+          שכחתי סיסמה
+        </Link>
+      </div>
     </form>
   );
 }

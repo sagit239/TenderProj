@@ -90,7 +90,8 @@ export function hasFixedReminders(type: TaskType) {
 }
 
 // The planned reminder timing shown in the tasks table (ARCHITECTURE: reminder rules)
-export function reminderLabel(t: Pick<Task, "type" | "has_time" | "remind_at">) {
+export function reminderLabel(t: Pick<Task, "type" | "has_time" | "remind_at" | "reminders_off">) {
+  if (t.reminders_off) return null;
   switch (t.type) {
     case "submission":
       return t.has_time ? "יום ו-3 ש׳ לפני" : "יום לפני";

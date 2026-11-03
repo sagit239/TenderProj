@@ -31,9 +31,16 @@ export async function proxy(request: NextRequest) {
 
   const { data } = await supabase.auth.getClaims();
   const isSignedIn = Boolean(data?.claims);
-  const isLoginPage = request.nextUrl.pathname === "/login";
+  const path = request.nextUrl.pathname;
+  const isLoginPage = path === "/login";
+  // Open without a session: password reset pages, and the reminders endpoint (checks its own secret)
+  const isPublic =
+    isLoginPage || path === "/forgot-password" || path === "/auth/confirm" || path.startsWith("/api/cron/");
 
-  if (!isSignedIn && !isLoginPage) {
+  if (!isSignedIn && path === "/reset-password") {
+    return redirectWithCookies(request, response, "/forgot-password", "?error=expired");
+  }
+  if (!isSignedIn && !isPublic) {
     return redirectWithCookies(request, response, "/login");
   }
   if (isSignedIn && isLoginPage) {
@@ -47,10 +54,11 @@ function redirectWithCookies(
   request: NextRequest,
   from: NextResponse,
   pathname: string,
+  search = "",
 ) {
   const url = request.nextUrl.clone();
   url.pathname = pathname;
-  url.search = "";
+  url.search = search;
   const redirect = NextResponse.redirect(url);
   from.cookies.getAll().forEach((cookie) => redirect.cookies.set(cookie));
   return redirect;

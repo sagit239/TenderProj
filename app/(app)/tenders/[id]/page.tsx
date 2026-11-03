@@ -184,7 +184,7 @@ async function loadTab(supabase: Supabase, tenderId: string, tab: string) {
     const [tasks, members, deadlines] = await Promise.all([
       supabase
         .from("tasks")
-        .select("id, deadline_id, title, type, due_at, has_time, is_done, remind_at, is_manual, sort_order, task_assignees(team_member_id)")
+        .select("id, deadline_id, title, type, due_at, has_time, is_done, remind_at, reminders_off, is_manual, sort_order, task_assignees(team_member_id)")
         .eq("tender_id", tenderId)
         .order("due_at", { nullsFirst: false })
         .order("sort_order"),
