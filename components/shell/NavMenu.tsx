@@ -2,17 +2,11 @@
 
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { Archive, Check, List, Plus, Users, type LucideIcon } from "lucide-react";
+import { Plus } from "lucide-react";
 import { buttonClasses } from "@/components/ui/Button";
+import { NAV_ITEMS } from "./nav-items";
 
-const NAV_ITEMS: { href: string; label: string; icon: LucideIcon }[] = [
-  { href: "/tenders", label: "מכרזים פעילים", icon: List },
-  { href: "/archive", label: "ארכיון", icon: Archive },
-  { href: "/submitted", label: "הוגשו", icon: Check },
-  { href: "/team", label: "אנשי צוות", icon: Users },
-];
-
-// "+ New tender" button and the four nav items; shared by the sidebar and the mobile drawer
+// "+ New tender" button and the five nav items; shared by the sidebar and the mobile drawer
 export function NavMenu({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
   const from = useSearchParams().get("from");

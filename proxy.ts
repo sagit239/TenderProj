@@ -44,7 +44,7 @@ export async function proxy(request: NextRequest) {
     return redirectWithCookies(request, response, "/login");
   }
   if (isSignedIn && isLoginPage) {
-    return redirectWithCookies(request, response, "/tenders");
+    return redirectWithCookies(request, response, "/dashboard");
   }
   return response;
 }

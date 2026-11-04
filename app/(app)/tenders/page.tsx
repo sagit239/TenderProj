@@ -7,17 +7,12 @@ import { buttonClasses } from "@/components/ui/Button";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { formatDue, isOverdue } from "@/lib/analysis";
 import { createClient } from "@/lib/db/server";
-import { ACTIVE_STATUSES, isDepartment, tenderHref } from "@/lib/tenders";
+import { loadFailedReminders } from "@/lib/failed-reminders";
+import { ACTIVE_STATUSES, earliestSubmission, isDepartment, tenderHref } from "@/lib/tenders";
 import { FailedRemindersBanner } from "@/components/reminders/FailedRemindersBanner";
-import type { FailedReminder, Tender } from "@/lib/types";
+import type { Tender } from "@/lib/types";
 
 type Submission = { due_at: string; has_time: boolean };
-type FailedRow = {
-  id: string;
-  recipient_email: string | null;
-  error: string | null;
-  tasks: { title: string; tenders: { name: string } };
-};
 type TenderRow = Tender & { deadlines: Submission[]; tasks: { due_at: string | null; is_done: boolean }[] };
 
 // Open tasks ("—" when the tender has no tasks) and how many of them are overdue
@@ -28,9 +23,8 @@ function taskCounts(t: TenderRow, now: number) {
   };
 }
 
-// The earliest submission deadline decides (contradicting dates are flagged as an issue)
 function submissionDate(t: TenderRow) {
-  const first = [...t.deadlines].sort((a, b) => a.due_at.localeCompare(b.due_at))[0];
+  const first = earliestSubmission(t.deadlines);
   return first ? formatDue(first.due_at, first.has_time) : null;
 }
 
@@ -52,22 +46,7 @@ export default async function ActiveTendersPage({
     .in("status", ACTIVE_STATUSES)
     .order("created_at", { ascending: false });
   if (department) query = query.eq("department", department);
-  const [{ data, error }, { data: failedData }] = await Promise.all([
-    query,
-    supabase
-      .from("reminders")
-      .select("id, recipient_email, error, tasks(title, tenders(name))")
-      .eq("status", "failed")
-      .is("handled_at", null)
-      .order("send_at", { ascending: false }),
-  ]);
-  const failed: FailedReminder[] = ((failedData ?? []) as unknown as FailedRow[]).map((r) => ({
-    id: r.id,
-    recipient_email: r.recipient_email,
-    error: r.error,
-    task_title: r.tasks.title,
-    tender_name: r.tasks.tenders.name,
-  }));
+  const [{ data, error }, failed] = await Promise.all([query, loadFailedReminders(supabase)]);
   const tenders = (data ?? []) as TenderRow[];
   const now = new Date().getTime();
 

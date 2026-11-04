@@ -61,6 +61,11 @@ export function tenderHref(id: string, from: TenderList, tab?: string) {
   return `/tenders/${id}?${params}`;
 }
 
+// The earliest submission deadline decides (contradicting dates are flagged as an issue)
+export function earliestSubmission<T extends { due_at: string }>(deadlines: T[]): T | undefined {
+  return [...deadlines].sort((a, b) => a.due_at.localeCompare(b.due_at))[0];
+}
+
 // Private Storage bucket for the original tender files
 export const BUCKET = "tender-files";
 

@@ -34,7 +34,7 @@ export async function signIn(
     };
   }
 
-  redirect("/tenders");
+  redirect("/dashboard");
 }
 
 export async function signOut() {

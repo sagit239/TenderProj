@@ -36,6 +36,5 @@ export async function saveNewPassword(
     return { form: "לא הצלחנו לשמור את הסיסמה. אפשר לנסות שוב בעוד רגע." };
   }
 
-  // M7 changes this to the dashboard
-  redirect("/tenders");
+  redirect("/dashboard");
 }

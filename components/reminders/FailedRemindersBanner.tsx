@@ -9,7 +9,7 @@ import { CardField, tdClass, thClass } from "@/components/tenders/ListParts";
 import { createClient } from "@/lib/db/client";
 import type { FailedReminder } from "@/lib/types";
 
-// "● 2 תזכורות לא נשלחו" bar above the active tenders, with a details dialog
+// "● 2 תזכורות לא נשלחו" bar on the dashboard and the active tenders, with a details dialog
 export function FailedRemindersBanner({ items }: { items: FailedReminder[] }) {
   const [open, setOpen] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
