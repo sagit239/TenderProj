@@ -53,7 +53,15 @@ export function reminderEmail(to: string, c: ReminderContent): Email {
   return { to, subject: `תזכורת: ${c.taskTitle} · ${c.tenderName}`, html, text };
 }
 
-export type FailedReminderLine = { tenderName: string; taskTitle: string; recipient: string; reason: string };
+// The tender summary as edited in "שליחה במייל": the user's text as is, line breaks kept
+export function summaryEmail(to: string, subject: string, body: string): Email {
+  const html = layout(
+    `<div style="line-height:1.6">${escapeHtml(body.trim()).replace(/\r?\n/g, "<br>")}</div>`,
+  );
+  return { to, subject, html, text: body.trim() };
+}
+
+export type FailedReminderLine ={ tenderName: string; taskTitle: string; recipient: string; reason: string };
 
 // Sent to the user after a run in which reminders failed
 export function failureAlertEmail(to: string, lines: FailedReminderLine[]): Email {

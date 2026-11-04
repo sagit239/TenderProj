@@ -66,8 +66,10 @@ export function Due({ iso, hasTime, className = "" }: { iso: string; hasTime: bo
   );
 }
 
+type ActionProps = { name: string; onEdit: () => void; onDelete: () => void; deleteLabel?: string };
+
 // "✎ עריכה · 🗑 מחיקה" in grey, like the team members screen
-export function ItemActions({ name, onEdit, onDelete }: { name: string; onEdit: () => void; onDelete: () => void }) {
+export function ItemActions({ name, onEdit, onDelete, deleteLabel = "מחיקה" }: ActionProps) {
   return (
     <span className="inline-flex shrink-0 items-center text-muted">
       <Button variant="ghost" size="sm" onClick={onEdit} aria-label={`עריכת ${name}`}>
@@ -75,16 +77,16 @@ export function ItemActions({ name, onEdit, onDelete }: { name: string; onEdit: 
         עריכה
       </Button>
       <span aria-hidden>·</span>
-      <Button variant="ghost" size="sm" onClick={onDelete} aria-label={`מחיקת ${name}`}>
+      <Button variant="ghost" size="sm" onClick={onDelete} aria-label={`${deleteLabel}: ${name}`}>
         <Trash2 size={14} strokeWidth={1.75} aria-hidden />
-        מחיקה
+        {deleteLabel}
       </Button>
     </span>
   );
 }
 
 // Icon-only edit/delete for table rows
-export function IconActions({ name, onEdit, onDelete }: { name: string; onEdit: () => void; onDelete: () => void }) {
+export function IconActions({ name, onEdit, onDelete, deleteLabel = "מחיקה" }: ActionProps) {
   const cls =
     "inline-flex size-11 items-center justify-center rounded-control text-muted hover:bg-surface hover:text-text focus-visible:outline-2 focus-visible:outline-text md:size-9";
   return (
@@ -92,7 +94,7 @@ export function IconActions({ name, onEdit, onDelete }: { name: string; onEdit: 
       <button type="button" onClick={onEdit} aria-label={`עריכת ${name}`} title="עריכה" className={cls}>
         <Pencil size={16} strokeWidth={1.75} />
       </button>
-      <button type="button" onClick={onDelete} aria-label={`מחיקת ${name}`} title="מחיקה" className={cls}>
+      <button type="button" onClick={onDelete} aria-label={`${deleteLabel}: ${name}`} title={deleteLabel} className={cls}>
         <Trash2 size={16} strokeWidth={1.75} />
       </button>
     </span>

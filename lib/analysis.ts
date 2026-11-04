@@ -84,14 +84,16 @@ export function isOverdue(t: Pick<Task, "due_at" | "is_done">, now = Date.now())
   return !t.is_done && t.due_at !== null && new Date(t.due_at).getTime() < now;
 }
 
-// Task types whose reminders follow fixed rules; "other" and "regular" use remind_at
-export function hasFixedReminders(type: TaskType) {
-  return type !== "other" && type !== "regular";
-}
+export const NEEDS_ASSIGNEE = "לשייך אחראי";
 
-// The planned reminder timing shown in the tasks table (ARCHITECTURE: reminder rules)
-export function reminderLabel(t: Pick<Task, "type" | "has_time" | "remind_at" | "reminders_off">) {
-  if (t.reminders_off) return null;
+// The planned reminder timing (ARCHITECTURE: reminder rules). Only timeline items have reminders.
+export function reminderLabel(
+  t: Pick<Task, "deadline_id" | "type" | "due_at" | "has_time" | "remind_at" | "reminders_off">,
+  hasAssignees: boolean,
+) {
+  if (t.reminders_off || !t.deadline_id) return null;
+  // Without an assignee nothing goes out, except a chosen time on "מועד אחר" (to the user)
+  if (!hasAssignees && !(t.type === "other" && t.remind_at)) return NEEDS_ASSIGNEE;
   switch (t.type) {
     case "submission":
       return t.has_time ? "יום ו-3 ש׳ לפני" : "יום לפני";
@@ -102,7 +104,7 @@ export function reminderLabel(t: Pick<Task, "type" | "has_time" | "remind_at" | 
     case "closing_meeting":
       return "בבוקר יום הפגישה";
     default:
-      return t.remind_at ? formatShort(t.remind_at) : null;
+      return t.remind_at ? formatShort(t.remind_at) : "יום לפני";
   }
 }
 

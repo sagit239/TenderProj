@@ -1,16 +1,19 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { MoreHorizontal, Trash2 } from "lucide-react";
+import { ChevronDown, FileText, Mail, MoreHorizontal, Printer, Trash2 } from "lucide-react";
 import { Breadcrumb } from "@/components/ui/Breadcrumb";
+import { buttonClasses } from "@/components/ui/Button";
 import { ConfirmDeleteDialog } from "@/components/ui/ConfirmDeleteDialog";
 import { Select } from "@/components/ui/Field";
+import { MenuButton } from "@/components/ui/MenuButton";
 import { useToast } from "@/components/ui/Toast";
 import { createClient } from "@/lib/db/client";
 import { LIST_LABELS, STATUSES, listForStatus, listHref, type TenderList } from "@/lib/tenders";
 import { deleteTender } from "@/lib/tenders-storage";
 import type { Tender, TenderStatus } from "@/lib/types";
+import { EmailDialog } from "./EmailDialog";
 import { DepartmentTag } from "./Tags";
 
 const MOVED_MESSAGES: Record<TenderList, string> = {
@@ -19,12 +22,16 @@ const MOVED_MESSAGES: Record<TenderList, string> = {
   submitted: "המכרז הועבר להוגשו",
 };
 
+const iconButton =
+  "inline-flex size-11 shrink-0 items-center justify-center rounded-control border border-text bg-white text-text hover:bg-surface focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text md:size-[38px]";
+
 export function TenderHeader({ tender, from }: { tender: Tender; from: TenderList }) {
   const router = useRouter();
   const toast = useToast();
   const [status, setStatus] = useState<TenderStatus>(tender.status);
   const [saving, setSaving] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [emailOpen, setEmailOpen] = useState(false);
 
   async function changeStatus(next: TenderStatus) {
     const previous = status;
@@ -42,6 +49,22 @@ export function TenderHeader({ tender, from }: { tender: Tender; from: TenderLis
     router.refresh();
   }
 
+  // Fetches the file first, so a failure shows a message instead of an error page
+  async function downloadWord() {
+    try {
+      const res = await fetch(`/api/tenders/${tender.id}/export/docx`);
+      if (!res.ok) throw new Error(String(res.status));
+      const url = URL.createObjectURL(await res.blob());
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${tender.name.replace(/[\/:*?"<>|]+/g, "-").trim() || "מכרז"}.docx`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      toast("הקובץ לא נוצר. אפשר לנסות שוב.", "error");
+    }
+  }
+
   return (
     <div className="mb-4">
       <Breadcrumb href={listHref(from, tender)} label={LIST_LABELS[from]} current={tender.name} />
@@ -50,8 +73,8 @@ export function TenderHeader({ tender, from }: { tender: Tender; from: TenderLis
           <h1 className="min-w-0 text-h1 break-words">{tender.name}</h1>
           <DepartmentTag department={tender.department} />
         </div>
-        <div className="flex items-center gap-2">
-          <div className="flex-1 md:w-[180px] md:flex-none">
+        <div className="flex flex-col gap-2 md:flex-row md:items-center">
+          <div className="md:w-[180px]">
             <label htmlFor="tender-status" className="sr-only">
               סטטוס
             </label>
@@ -68,10 +91,50 @@ export function TenderHeader({ tender, from }: { tender: Tender; from: TenderLis
               ))}
             </Select>
           </div>
-          <MoreMenu onDelete={() => setDeleteOpen(true)} />
+          {/* On mobile: export and email on their own row (DESIGN: התאמה לנייד) */}
+          <div className="flex items-center gap-2">
+            <MenuButton
+              className="flex-1 md:flex-none"
+              buttonClassName={`${buttonClasses("secondary")} w-full`}
+              items={[
+                { label: "Word", icon: <FileText size={16} strokeWidth={1.75} aria-hidden />, onSelect: downloadWord },
+                {
+                  label: "PDF (הדפסה)",
+                  icon: <Printer size={16} strokeWidth={1.75} aria-hidden />,
+                  onSelect: () => window.open(`/print/tenders/${tender.id}?auto=1`, "_blank"),
+                },
+              ]}
+            >
+              ייצוא
+              <ChevronDown size={16} strokeWidth={1.75} aria-hidden />
+            </MenuButton>
+            <button
+              type="button"
+              onClick={() => setEmailOpen(true)}
+              className={`${buttonClasses("secondary")} flex-1 md:flex-none`}
+            >
+              <Mail size={16} strokeWidth={1.75} aria-hidden />
+              שליחה במייל
+            </button>
+            <MenuButton
+              label="פעולות נוספות"
+              buttonClassName={iconButton}
+              items={[
+                {
+                  label: "מחיקת מכרז",
+                  icon: <Trash2 size={16} strokeWidth={1.75} aria-hidden />,
+                  danger: true,
+                  onSelect: () => setDeleteOpen(true),
+                },
+              ]}
+            >
+              <MoreHorizontal size={18} strokeWidth={1.75} />
+            </MenuButton>
+          </div>
         </div>
       </div>
 
+      <EmailDialog open={emailOpen} onClose={() => setEmailOpen(false)} tender={tender} />
       <ConfirmDeleteDialog
         open={deleteOpen}
         title={`למחוק את "${tender.name}"?`}
@@ -87,71 +150,6 @@ export function TenderHeader({ tender, from }: { tender: Tender; from: TenderLis
           return ok;
         }}
       />
-    </div>
-  );
-}
-
-// "⋯" button with a small menu; closes on Esc or an outside click and returns focus to the button
-function MoreMenu({ onDelete }: { onDelete: () => void }) {
-  const [open, setOpen] = useState(false);
-  const wrapperRef = useRef<HTMLDivElement>(null);
-  const buttonRef = useRef<HTMLButtonElement>(null);
-  const itemRef = useRef<HTMLButtonElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    itemRef.current?.focus();
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        setOpen(false);
-        buttonRef.current?.focus();
-      }
-    };
-    const onClick = (e: MouseEvent) => {
-      if (!wrapperRef.current?.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("keydown", onKey);
-    document.addEventListener("mousedown", onClick);
-    return () => {
-      document.removeEventListener("keydown", onKey);
-      document.removeEventListener("mousedown", onClick);
-    };
-  }, [open]);
-
-  return (
-    <div ref={wrapperRef} className="relative">
-      <button
-        ref={buttonRef}
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        aria-label="פעולות נוספות"
-        title="פעולות נוספות"
-        aria-haspopup="menu"
-        aria-expanded={open}
-        className="inline-flex size-11 items-center justify-center rounded-control border border-text bg-white text-text hover:bg-surface focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text md:size-[38px]"
-      >
-        <MoreHorizontal size={18} strokeWidth={1.75} />
-      </button>
-      {open && (
-        <div
-          role="menu"
-          className="absolute end-0 top-full z-20 mt-1 min-w-[160px] rounded-control border border-line bg-white py-1 shadow-dialog motion-safe:animate-fade-in"
-        >
-          <button
-            ref={itemRef}
-            type="button"
-            role="menuitem"
-            onClick={() => {
-              setOpen(false);
-              onDelete();
-            }}
-            className="flex h-11 w-full items-center gap-2 px-3 text-start text-[14px] font-medium text-accent hover:bg-accent-tint focus-visible:bg-accent-tint focus-visible:outline-none md:h-9"
-          >
-            <Trash2 size={16} strokeWidth={1.75} aria-hidden />
-            מחיקת מכרז
-          </button>
-        </div>
-      )}
     </div>
   );
 }

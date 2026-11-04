@@ -1,12 +1,15 @@
 "use client";
 
 import { useState } from "react";
+import { CalendarPlus } from "lucide-react";
+import { Button } from "@/components/ui/Button";
 import { Checkbox } from "@/components/ui/Checkbox";
 import { ConfirmDeleteDialog } from "@/components/ui/ConfirmDeleteDialog";
 import { createClient } from "@/lib/db/client";
-import { isOverdue, reminderLabel } from "@/lib/analysis";
+import { NEEDS_ASSIGNEE, isOverdue, reminderLabel } from "@/lib/analysis";
 import type { Deadline, Task } from "@/lib/types";
 import { AssigneePicker, type Member } from "./AssigneePicker";
+import { DeadlineDialog } from "./DeadlineDialog";
 import { TaskDialog, saveAssignees } from "./TaskDialog";
 import { AddButton, Due, EmptyCard, IconActions, ItemActions, TabHeading, tdClass, thClass, useSave } from "./TabParts";
 import { OverdueBadge } from "./Tags";
@@ -23,6 +26,7 @@ export function TasksTab({ tenderId, items, members, deadlines }: Props) {
   const { save, remove } = useSave();
   const [editing, setEditing] = useState<Task | null | undefined>(undefined);
   const [deleting, setDeleting] = useState<Task | null>(null);
+  const [adding, setAdding] = useState<Task | null>(null);
   // Local copies for instant feedback; the server copy arrives with the refresh
   const [done, setDone] = useState<Record<string, boolean>>({});
   const [assignees, setAssignees] = useState<Record<string, string[]>>({});
@@ -72,7 +76,20 @@ export function TasksTab({ tenderId, items, members, deadlines }: Props) {
     ) : (
       <span className="text-muted">—</span>
     );
-  const reminder = (t: Task) => reminderLabel(t) ?? <span className="text-muted">—</span>;
+  const reminder = (t: Task) => {
+    const text = reminderLabel(t, assigneesOf(t).length > 0);
+    return text ? (
+      <span className={text === NEEDS_ASSIGNEE ? "text-muted" : ""}>{text}</span>
+    ) : (
+      <span className="text-muted">—</span>
+    );
+  };
+  const addButton = (t: Task) => (
+    <Button variant="ghost" size="sm" onClick={() => setAdding(t)} aria-label={`הוספה ללוח הזמנים: ${t.title}`}>
+      <CalendarPlus size={14} strokeWidth={1.75} aria-hidden />
+      הוספה ללוח הזמנים
+    </Button>
+  );
 
   return (
     <section aria-labelledby="tab-heading">
@@ -81,7 +98,7 @@ export function TasksTab({ tenderId, items, members, deadlines }: Props) {
         <EmptyCard text="אין משימות. אפשר להוסיף משימה." />
       ) : (
         <>
-          <div className="hidden overflow-hidden rounded-table border border-line bg-white md:block">
+          <div className="hidden overflow-hidden rounded-table border border-line bg-white xl:block">
             <table className="w-full">
               <thead className="bg-table-head">
                 <tr className="border-b border-line text-small text-muted">
@@ -115,6 +132,7 @@ export function TasksTab({ tenderId, items, members, deadlines }: Props) {
                         <span dir="auto">{reminder(t)}</span>
                       </td>
                       <td className="px-2 py-1 text-end align-middle whitespace-nowrap">
+                        {!t.deadline_id && addButton(t)}
                         <IconActions name={t.title} onEdit={() => setEditing(t)} onDelete={() => setDeleting(t)} />
                       </td>
                     </tr>
@@ -124,7 +142,7 @@ export function TasksTab({ tenderId, items, members, deadlines }: Props) {
             </table>
           </div>
 
-          <ul className="flex flex-col gap-2 md:hidden">
+          <ul className="flex flex-col gap-2 xl:hidden">
             {items.map((t) => {
               const late = isOverdue({ due_at: t.due_at, is_done: doneOf(t) }, now);
               return (
@@ -154,8 +172,9 @@ export function TasksTab({ tenderId, items, members, deadlines }: Props) {
                       <dd dir="auto">{reminder(t)}</dd>
                     </div>
                   </dl>
-                  <div className="mt-1 -ms-1 flex">
+                  <div className="mt-1 -ms-1 flex flex-wrap items-center">
                     <ItemActions name={t.title} onEdit={() => setEditing(t)} onDelete={() => setDeleting(t)} />
+                    {!t.deadline_id && addButton(t)}
                   </div>
                 </li>
               );
@@ -164,6 +183,13 @@ export function TasksTab({ tenderId, items, members, deadlines }: Props) {
         </>
       )}
 
+      <DeadlineDialog
+        open={adding !== null}
+        tenderId={tenderId}
+        deadline={null}
+        fromTask={adding}
+        onClose={() => setAdding(null)}
+      />
       <TaskDialog
         open={editing !== undefined}
         tenderId={tenderId}

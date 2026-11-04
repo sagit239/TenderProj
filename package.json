@@ -9,11 +9,12 @@
     "lint": "eslint",
     "db:migrate": "node --env-file=.env scripts/db-migrate.mjs",
     "reminders:run": "node --env-file=.env scripts/run-reminders.mjs",
-    "ai:trial":"node --env-file=.env --import tsx scripts/ai-trial.mts"
+    "ai:trial": "node --env-file=.env --import tsx scripts/ai-trial.mts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",
     "@supabase/supabase-js": "^2.118.0",
+    "docx": "^9.15.2",
     "lucide-react": "^1.66.0",
     "mammoth": "^1.13.0",
     "next": "16.4.3",

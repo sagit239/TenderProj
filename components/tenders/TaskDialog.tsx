@@ -2,11 +2,9 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/Button";
-import { Checkbox } from "@/components/ui/Checkbox";
 import { Dialog } from "@/components/ui/Dialog";
 import { Field, Input } from "@/components/ui/Field";
 import { createClient } from "@/lib/db/client";
-import { FIXED_REMINDER_TEXT, hasFixedReminders, israelTimeToIso, isoToIsraelParts } from "@/lib/analysis";
 import type { Task } from "@/lib/types";
 import { AssigneePicker, type Member } from "./AssigneePicker";
 import { useSave } from "./TabParts";
@@ -43,7 +41,7 @@ type Props = {
   onClose: () => void;
 };
 
-// "משימה" dialog: name, due date, assignees and an optional reminder time
+// "משימה" dialog: name and assignees. Dates and reminders are set on the timeline (ADR-24)
 export function TaskDialog({ open, tenderId, task, members, nextSortOrder, onClose }: Props) {
   return (
     <Dialog open={open} onClose={onClose} title={task ? "עריכת משימה" : "הוספת משימה"}>
@@ -61,69 +59,34 @@ export function TaskDialog({ open, tenderId, task, members, nextSortOrder, onClo
   );
 }
 
-type Values = {
-  title: string;
-  date: string;
-  time: string;
-  assignees: string[];
-  remindDate: string;
-  remindTime: string;
-  remindersOff: boolean;
-};
-type Errors = { title?: string; date?: string; remindDate?: string };
+type Values = { title: string; assignees: string[] };
+type Errors = { title?: string };
 
 function TaskForm({ tenderId, task, members, nextSortOrder, onClose }: Omit<Props, "open">) {
-  const due = task?.due_at ? isoToIsraelParts(task.due_at) : null;
-  const remind = task?.remind_at ? isoToIsraelParts(task.remind_at) : null;
   const [values, setValues] = useState<Values>({
     title: task?.title ?? "",
-    date: due?.date ?? "",
-    time: task?.has_time && due ? due.time : "",
     assignees: task?.assignee_ids ?? [],
-    remindDate: remind?.date ?? "",
-    remindTime: remind?.time ?? "",
-    remindersOff: task?.reminders_off ?? false,
   });
   const [errors, setErrors] = useState<Errors>({});
   const { save, busy } = useSave();
-  const type = task?.type ?? "regular";
-  const fixed = hasFixedReminders(type);
-  // A new task, and a task linked to a deadline, must have a date
-  const dateRequired = !task || task.deadline_id !== null || task.due_at !== null;
 
   function validate(v: Values): Errors {
-    return {
-      title: v.title.trim() ? undefined : "צריך למלא את שם המשימה",
-      date: !dateRequired || v.date ? undefined : "צריך לבחור תאריך",
-      remindDate: v.remindTime && !v.remindDate ? "צריך לבחור תאריך לתזכורת" : undefined,
-    };
+    return { title: v.title.trim() ? undefined : "צריך למלא את שם המשימה" };
   }
 
   function update<K extends keyof Values>(field: K, value: Values[K]) {
     const next = { ...values, [field]: value };
     setValues(next);
-    const now = validate(next);
-    setErrors((e) => ({
-      title: e.title && now.title,
-      date: e.date && now.date,
-      remindDate: e.remindDate && now.remindDate,
-    }));
+    setErrors((e) => ({ title: e.title && validate(next).title }));
   }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     const next = validate(values);
     setErrors(next);
-    if (next.title || next.date || next.remindDate) return;
+    if (next.title) return;
 
-    const row = {
-      title: values.title.trim(),
-      due_at: values.date ? israelTimeToIso(values.date, values.time || null) : null,
-      has_time: Boolean(values.date && values.time),
-      remind_at: !fixed && values.remindDate ? israelTimeToIso(values.remindDate, values.remindTime || null) : null,
-      reminders_off: fixed && values.remindersOff,
-      is_manual: true,
-    };
+    const row = { title: values.title.trim(), is_manual: true };
     const supabase = createClient();
     const ok = await save(async () => {
       if (task) {
@@ -154,23 +117,8 @@ function TaskForm({ tenderId, task, members, nextSortOrder, onClose }: Omit<Prop
           autoComplete="off"
         />
       </Field>
-      <div className="grid grid-cols-2 gap-3">
-        <Field id="task-date" label={dateRequired ? "מועד" : "מועד (לא חובה)"} error={errors.date}>
-          <Input
-            id="task-date"
-            type="date"
-            value={values.date}
-            onChange={(e) => update("date", e.target.value)}
-            onBlur={() => setErrors((er) => ({ ...er, date: validate(values).date }))}
-            error={errors.date}
-          />
-        </Field>
-        <Field id="task-time" label="שעה (לא חובה)">
-          <Input id="task-time" type="time" value={values.time} onChange={(e) => update("time", e.target.value)} />
-        </Field>
-      </div>
       {task?.deadline_id && (
-        <p className="-mt-2 text-small text-muted">המשימה קשורה למועד בלוח הזמנים. שינוי התאריך יעדכן גם אותו.</p>
+        <p className="-mt-2 text-small text-muted">תאריך ותזכורת נערכים בלשונית &quot;לוח זמנים&quot;.</p>
       )}
       <div className="flex flex-col gap-1.5">
         <label htmlFor="task-assignees" className="text-[13px] leading-[18px] font-semibold text-text">
@@ -185,46 +133,6 @@ function TaskForm({ tenderId, task, members, nextSortOrder, onClose }: Omit<Prop
           className="md:h-10"
         />
       </div>
-      {fixed ? (
-        <div className="flex flex-col gap-1.5">
-          <p className="text-[13px] leading-[18px] font-semibold text-text">תזכורות</p>
-          <p className="text-body text-muted">
-            {values.remindersOff ? "לא יישלחו תזכורות על המשימה הזו." : FIXED_REMINDER_TEXT[type]}
-          </p>
-          <label className="-ms-3 flex w-fit cursor-pointer items-center text-body md:ms-0 md:gap-2">
-            <Checkbox
-              checked={values.remindersOff}
-              onChange={(e) => update("remindersOff", e.target.checked)}
-            />
-            בלי תזכורת
-          </label>
-        </div>
-      ) : (
-        <div>
-          <div className="grid grid-cols-2 gap-3">
-            <Field id="task-remind-date" label="מועד תזכורת (לא חובה)" error={errors.remindDate}>
-              <Input
-                id="task-remind-date"
-                type="date"
-                value={values.remindDate}
-                onChange={(e) => update("remindDate", e.target.value)}
-                error={errors.remindDate}
-              />
-            </Field>
-            <Field id="task-remind-time" label="שעה">
-              <Input id="task-remind-time" type="time" value={values.remindTime} onChange={(e) => update("remindTime", e.target.value)} />
-            </Field>
-          </div>
-          {!values.remindDate && <p className="mt-1.5 text-small text-muted">בלי מועד תזכורת לא תישלח תזכורת.</p>}
-        </div>
-      )}
-      {!(fixed && values.remindersOff) && (
-        <p className="text-small text-muted">
-          {fixed
-            ? "התזכורות יישלחו לאחראים. בלי אחראי לא תישלח תזכורת."
-            : "התזכורת תישלח לאחראים. אם אין אחראי, היא תישלח אלייך."}
-        </p>
-      )}
       <div className="flex flex-wrap gap-2 pt-2 pb-3">
         <Button type="submit" variant="primary" disabled={busy}>
           {busy ? "שומרת…" : "שמירה"}

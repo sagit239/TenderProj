@@ -100,7 +100,7 @@ export type Task = {
   has_time: boolean;
   is_done: boolean;
   remind_at: string | null;
-  // "בלי תזכורת"
+  // "ללא תזכורת"
   reminders_off: boolean;
   is_manual: boolean;
   sort_order: number;
@@ -154,4 +154,19 @@ export type ReanalysisRun = {
   finished_at: string;
   change_report: ChangeReport | null;
   pending: number;
+};
+
+// The four parts of the tender summary (export and "שליחה במייל")
+export type SummaryPart = "requirements" | "deadlines" | "tasks" | "issues";
+
+// The summary with display-ready text, shared by Word, the print page and the email draft
+export type TenderSummary = {
+  id: string;
+  name: string;
+  department: string;
+  status: string;
+  requirements: string[];
+  deadlines: { type: string; title: string; due: string; assignees: string; state: string; source: string }[];
+  tasks: { title: string; due: string; assignees: string; state: string }[];
+  issues: { category: string; title: string; explanation: string; source: string; question: string }[];
 };

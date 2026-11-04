@@ -9,7 +9,7 @@ import { ScrollToItem } from "@/components/tenders/ScrollToItem";
 import { EmptyCard } from "@/components/tenders/TabParts";
 import { TasksTab } from "@/components/tenders/TasksTab";
 import { TenderHeader } from "@/components/tenders/TenderHeader";
-import { TimelineTab } from "@/components/tenders/TimelineTab";
+import { TimelineTab, type TimelineTask } from "@/components/tenders/TimelineTab";
 import { Tabs } from "@/components/ui/Tabs";
 import { createClient } from "@/lib/db/server";
 import { isTenderList, listForStatus, tenderHref, type TenderList } from "@/lib/tenders";
@@ -172,13 +172,27 @@ function emptyTab(tender: TenderAnalysis, heading: string) {
 // Fetches only what the active tab shows
 async function loadTab(supabase: Supabase, tenderId: string, tab: string) {
   if (tab === "timeline") {
-    const { data, error } = await supabase
-      .from("deadlines")
-      .select("id, type, title, due_at, has_time, source_refs, is_manual, is_auto")
-      .eq("tender_id", tenderId)
-      .order("due_at");
-    if (error) throw new Error("Could not load deadlines");
-    return <TimelineTab tenderId={tenderId} items={data as Deadline[]} />;
+    const [deadlines, tasks, members] = await Promise.all([
+      supabase
+        .from("deadlines")
+        .select("id, type, title, due_at, has_time, source_refs, is_manual, is_auto")
+        .eq("tender_id", tenderId)
+        .order("due_at"),
+      // The task linked to each deadline holds its assignees and reminder settings
+      supabase
+        .from("tasks")
+        .select("id, deadline_id, type, due_at, has_time, remind_at, reminders_off, task_assignees(team_member_id)")
+        .eq("tender_id", tenderId)
+        .not("deadline_id", "is", null),
+      supabase.from("team_members").select("id, name").order("name"),
+    ]);
+    if (deadlines.error || tasks.error || members.error) throw new Error("Could not load deadlines");
+    const linked = (
+      tasks.data as (Omit<TimelineTask, "assignee_ids"> & { task_assignees: { team_member_id: string }[] })[]
+    ).map(({ task_assignees, ...t }) => ({ ...t, assignee_ids: task_assignees.map((a) => a.team_member_id) }));
+    return (
+      <TimelineTab tenderId={tenderId} items={deadlines.data as Deadline[]} tasks={linked} members={members.data} />
+    );
   }
   if (tab === "tasks") {
     const [tasks, members, deadlines] = await Promise.all([

@@ -11,10 +11,20 @@ type Props = {
   onClose: () => void;
   // Returns false when the delete failed
   onConfirm: () => Promise<boolean>;
+  confirmLabel?: string;
+  busyLabel?: string;
 };
 
 // Shared delete confirmation: "למחוק את <name>?", explanation, red "מחיקה" and "ביטול"
-export function ConfirmDeleteDialog({ open, title, description, onClose, onConfirm }: Props) {
+export function ConfirmDeleteDialog({
+  open,
+  title,
+  description,
+  onClose,
+  onConfirm,
+  confirmLabel = "מחיקה",
+  busyLabel = "מוחקת…",
+}: Props) {
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -40,7 +50,7 @@ export function ConfirmDeleteDialog({ open, title, description, onClose, onConfi
       footer={
         <>
           <Button variant="accent" onClick={confirm} disabled={deleting}>
-            {deleting ? "מוחקת…" : "מחיקה"}
+            {deleting ? busyLabel : confirmLabel}
           </Button>
           <Button variant="secondary" onClick={close} disabled={deleting}>
             ביטול

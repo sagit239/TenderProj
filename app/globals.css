@@ -89,3 +89,16 @@ body {
   font-size: 14px;
   line-height: 22px;
 }
+
+/* Print page (/print/tenders/[id]): white paper, no backgrounds or shadows */
+@media print {
+  @page {
+    margin: 15mm;
+  }
+  body {
+    background: #ffffff;
+  }
+  .print-keep {
+    break-inside: avoid;
+  }
+}
