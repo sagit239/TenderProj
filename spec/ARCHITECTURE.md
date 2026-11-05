@@ -112,7 +112,7 @@ Supabase
 | `issues` | id, tender_id, category, title, explanation, source_refs, suggested_question, is_manual | category: `threshold`, `guarantees`, `penalties`, `liability`, `insurance`, `payment_terms`, `one_sided`, `contradictions` |
 | `analysis_runs` | id, tender_id, started_at, finished_at, status, change_report | כל ריצת ניתוח. ‏change_report: דוח השינויים מול הגרסה הקודמת (JSON) |
 | `analysis_proposals` | id, run_id, tender_id, item_type, payload, status | פריטים חדשים מניתוח חוזר שממתינים לאישור. status: `pending`, `accepted`, `rejected` |
-| `reminders` | id, task_id, team_member_id?, send_at, kind, status, sent_at, error | team_member_id ריק = תזכורת למשתמשת (`NOTIFY_EMAIL`). כתובת המייל נשלפת ברגע השליחה. kind: `scheduled` / `followup` / `self`. status: `pending`, `sent`, `cancelled`, `failed` |
+| `reminders` | id, task_id, team_member_id?, send_at, kind, status, sent_at, error | team_member_id ריק ו-kind `self` קיימים רק ברשומות ישנות (ADR-29). כתובת המייל נשלפת ברגע השליחה. kind: `scheduled` / `followup` / `self`. status: `pending`, `sent`, `cancelled`, `failed` |
 | `holidays` | date, name | חגים בישראל שאינם ימי עבודה, לשנים הקרובות. נטען ב-Migration |
 | `app_migrations` | name, applied_at | רישום ה-Migrations שהורצו בכל סביבה |
 
@@ -177,7 +177,7 @@ Supabase
    | `bidders_meeting` | 3 ימים לפני, ובנוסף `followup` יום לפני |
    | `clarification_questions` | 24 שעות לפני |
    | `closing_meeting` | ב-08:00 ביום הפגישה |
-   | `other` | אם `remind_at` מולא: תזכורת ב-`remind_at` לכל האחראים, ואם אין אחראי, תזכורת `self` למשתמשת. אחרת: יום לפני המועד, לאחראים בלבד (ADR-23) |
+   | `other` | אם `remind_at` מולא: תזכורת ב-`remind_at` לכל האחראים. אחרת: יום לפני המועד. בלי אחראי לא נוצרת תזכורת (ADR-23, ADR-29) |
    | `regular` | אין תזכורות (ADR-24) |
 
    - **שישי, שבת וחגים:** תזכורת שזמנה יוצא ביום שישי, בשבת או בתאריך מטבלת `holidays` מוקדמת ליום העבודה הקודם, באותה שעה שבה הייתה אמורה לצאת (במועד בלי שעה, ב-08:00). התזכורת "3 שעות לפני" לא מוזזת.
@@ -411,3 +411,8 @@ Supabase
 **הקשר:** שדות התאריך והשעה של הדפדפן מוצגים לפי שפת המחשב. במחשב באנגלית החודש מופיע לפני היום ונדרש AM/PM, ובבדיקה ב-Production נשמר תאריך שגוי, והשעה לא נקלטה.
 **החלטה:** חלון "מועד" משתמש בשדות טקסט (`components/ui/DateTimeInputs.tsx`) בפורמט יום/חודש/שנה ו-24 שעות. הערכים שנשמרים לא השתנו. לוח השנה הקופץ נשאר של הדפדפן.
 **השלכות:** ההזנה זהה בכל מחשב. שמות החודשים בלוח השנה הקופץ עדיין מופיעים בשפת הדפדפן. כל שדה תאריך או שעה חדש צריך להשתמש ברכיבים האלה.
+
+### ADR-29: תזכורות נשלחות רק לאחראים
+**הקשר:** תזכורת ידנית ב"מועד אחר" בלי אחראי נשלחה למשתמשת, ושאר המועדים בלי אחראי לא שלחו כלום. הכלל הזה היה לא עקבי, והמשתמשת לא הופיעה ברשימת התפקידים.
+**החלטה:** ‏Migration ‏`20261105120000_m8_reminders_need_assignee` מסיר את התזכורת למשתמשת מ-`rebuild_task_reminders` ומוסיף את התפקיד "אחראי/ת מכרזים". בלוח הזמנים הריבוע הוחלף בשני כפתורים (`ReminderToggle`).
+**השלכות:** בלי אחראי לא נשלחת תזכורת לאף אחד, והממשק אומר זאת. המשתמשת מקבלת תזכורות רק אם היא ברשימת אנשי הצוות ונבחרה כאחראית. ההתראות על תזכורות שנכשלו ממשיכות להגיע אליה ל-`NOTIFY_EMAIL`. הערך `self` נשאר במבנה הטבלה בשביל רשומות ישנות.
