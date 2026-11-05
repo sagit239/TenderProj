@@ -84,7 +84,7 @@ export function isOverdue(t: Pick<Task, "due_at" | "is_done">, now = Date.now())
   return !t.is_done && t.due_at !== null && new Date(t.due_at).getTime() < now;
 }
 
-export const NEEDS_ASSIGNEE = "לשייך אחראי";
+export const NEEDS_ASSIGNEE = "לא תישלח בלי אחראי";
 
 // The planned reminder timing (ARCHITECTURE: reminder rules). Only timeline items have reminders.
 export function reminderLabel(
@@ -92,8 +92,8 @@ export function reminderLabel(
   hasAssignees: boolean,
 ) {
   if (t.reminders_off || !t.deadline_id) return null;
-  // Without an assignee nothing goes out, except a chosen time on "מועד אחר" (to the user)
-  if (!hasAssignees && !(t.type === "other" && t.remind_at)) return NEEDS_ASSIGNEE;
+  // Without an assignee nothing goes out
+  if (!hasAssignees) return NEEDS_ASSIGNEE;
   switch (t.type) {
     case "submission":
       return t.has_time ? "יום ו-3 ש׳ לפני" : "יום לפני";

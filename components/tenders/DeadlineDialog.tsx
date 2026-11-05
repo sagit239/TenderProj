@@ -197,7 +197,7 @@ function DeadlineForm({ tenderId, deadline, remindAt, fromTask, onClose }: Omit<
           </div>
           <p className="mt-1.5 text-small text-muted">
             {values.remindDate
-              ? "התזכורת תישלח לאחראים. אם אין אחראי, היא תישלח אלייך."
+              ? "התזכורת תישלח לאחראים. בלי אחראי היא לא תישלח."
               : "בלי מועד תזכורת, תזכורת תישלח לאחראים יום לפני המועד."}
           </p>
         </div>

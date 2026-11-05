@@ -1,5 +1,5 @@
 -- Production check, read-only: paste into the SQL Editor after the migrations.
--- Expected: migrations 11, tables with app access 14, tables without RLS 0.
+-- Expected: migrations 12, tables with app access 14, tables without RLS 0.
 -- The cron rows appear only after cron-reminders.sql has run; until then they show "not set up".
 with counts as (
   select 1 as sort_order, 'migrations' as check_name, count(*)::text as result

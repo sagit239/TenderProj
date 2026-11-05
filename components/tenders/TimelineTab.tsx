@@ -1,10 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { Checkbox } from "@/components/ui/Checkbox";
 import { ConfirmDeleteDialog } from "@/components/ui/ConfirmDeleteDialog";
 import { createClient } from "@/lib/db/client";
 import { DEADLINE_TYPE_LABELS, NEEDS_ASSIGNEE, reminderLabel } from "@/lib/analysis";
+import { ReminderToggle } from "./ReminderToggle";
 import type { Deadline, Task } from "@/lib/types";
 import { AssigneePicker, type Member } from "./AssigneePicker";
 import { DeadlineDialog } from "./DeadlineDialog";
@@ -69,26 +69,20 @@ export function TimelineTab({ tenderId, items, tasks, members }: Props) {
     );
   };
 
-  // Checked = reminders go out; unchecking is "ללא תזכורת"
+  // "עם תזכורת" = reminders go out; "ללא תזכורת" switches them off
   const reminder = (d: Deadline) => {
     const t = taskOf(d);
     if (!t) return <span className="text-muted">—</span>;
     const sends = !offOf(t);
     const when = reminderLabel({ ...t, reminders_off: false }, assigneesOf(t).length > 0);
-    const text = !sends
-      ? "ללא תזכורת · לסמן להפעלה"
-      : when === NEEDS_ASSIGNEE || !when
-        ? (when ?? "—")
-        : `תישלח ${when}`;
     return (
-      <label className="-ms-3 flex w-fit cursor-pointer items-center xl:-ms-2">
-        <Checkbox
-          checked={sends}
-          onChange={(e) => toggleReminders(t, e.target.checked)}
-          aria-label={`שליחת תזכורת: ${d.title}`}
-        />
-        <span className={sends && when !== NEEDS_ASSIGNEE ? "" : "text-muted"}>{text}</span>
-      </label>
+      <ReminderToggle
+        on={sends}
+        label={`תזכורת: ${d.title}`}
+        note={sends ? when : null}
+        muted={when === NEEDS_ASSIGNEE}
+        onChange={(send) => toggleReminders(t, send)}
+      />
     );
   };
 
