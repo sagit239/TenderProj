@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Dialog } from "@/components/ui/Dialog";
+import { DateInput, isIsoDate, isTime, TimeInput } from "@/components/ui/DateTimeInputs";
 import { Field, Input, Select } from "@/components/ui/Field";
 import { createClient } from "@/lib/db/client";
 import { DEADLINE_TYPE_LABELS, FIXED_REMINDER_TEXT, israelTimeToIso, isoToIsraelParts } from "@/lib/analysis";
@@ -40,7 +41,10 @@ export function DeadlineDialog({ open, tenderId, deadline, remindAt = null, from
 }
 
 type Values = { title: string; type: DeadlineType; date: string; time: string; remindDate: string; remindTime: string };
-type Errors = { title?: string; date?: string; remindDate?: string };
+type Errors = { title?: string; date?: string; time?: string; remindDate?: string; remindTime?: string };
+
+const BAD_DATE = "התאריך לא תקין. כותבים יום/חודש/שנה";
+const BAD_TIME = "השעה לא תקינה. כותבים למשל 14:30";
 
 function DeadlineForm({ tenderId, deadline, remindAt, fromTask, onClose }: Omit<Required<Props>, "open">) {
   const source = deadline ?? fromTask;
@@ -59,8 +63,15 @@ function DeadlineForm({ tenderId, deadline, remindAt, fromTask, onClose }: Omit<
 
   const validate = (v: Values): Errors => ({
     title: v.title.trim() ? undefined : "צריך למלא את שם המועד",
-    date: v.date ? undefined : "צריך לבחור תאריך",
-    remindDate: v.remindTime && !v.remindDate ? "צריך לבחור תאריך לתזכורת" : undefined,
+    date: !v.date ? "צריך לבחור תאריך" : isIsoDate(v.date) ? undefined : BAD_DATE,
+    time: v.time && !isTime(v.time) ? BAD_TIME : undefined,
+    remindDate:
+      v.remindTime && !v.remindDate
+        ? "צריך לבחור תאריך לתזכורת"
+        : v.remindDate && !isIsoDate(v.remindDate)
+          ? BAD_DATE
+          : undefined,
+    remindTime: v.remindTime && !isTime(v.remindTime) ? BAD_TIME : undefined,
   });
 
   function update<K extends keyof Values>(field: K, value: Values[K]) {
@@ -70,7 +81,9 @@ function DeadlineForm({ tenderId, deadline, remindAt, fromTask, onClose }: Omit<
     setErrors((e) => ({
       title: e.title && now.title,
       date: e.date && now.date,
+      time: e.time && now.time,
       remindDate: e.remindDate && now.remindDate,
+      remindTime: e.remindTime && now.remindTime,
     }));
   }
 
@@ -78,7 +91,7 @@ function DeadlineForm({ tenderId, deadline, remindAt, fromTask, onClose }: Omit<
     e.preventDefault();
     const next = validate(values);
     setErrors(next);
-    if (next.title || next.date || next.remindDate) return;
+    if (Object.values(next).some(Boolean)) return;
 
     const row = {
       title: values.title.trim(),
@@ -150,37 +163,35 @@ function DeadlineForm({ tenderId, deadline, remindAt, fromTask, onClose }: Omit<
       </Field>
       <div className="grid grid-cols-2 gap-3">
         <Field id="deadline-date" label="תאריך" error={errors.date}>
-          <Input
+          <DateInput
             id="deadline-date"
-            type="date"
             value={values.date}
-            onChange={(e) => update("date", e.target.value)}
+            onChange={(date) => update("date", date)}
             onBlur={() => setErrors((er) => ({ ...er, date: validate(values).date }))}
             error={errors.date}
           />
         </Field>
-        <Field id="deadline-time" label="שעה (לא חובה)">
-          <Input id="deadline-time" type="time" value={values.time} onChange={(e) => update("time", e.target.value)} />
+        <Field id="deadline-time" label="שעה (לא חובה)" error={errors.time}>
+          <TimeInput id="deadline-time" value={values.time} onChange={(time) => update("time", time)} error={errors.time} />
         </Field>
       </div>
       {values.type === "other" ? (
         <div>
           <div className="grid grid-cols-2 gap-3">
             <Field id="deadline-remind-date" label="מועד תזכורת (לא חובה)" error={errors.remindDate}>
-              <Input
+              <DateInput
                 id="deadline-remind-date"
-                type="date"
                 value={values.remindDate}
-                onChange={(e) => update("remindDate", e.target.value)}
+                onChange={(date) => update("remindDate", date)}
                 error={errors.remindDate}
               />
             </Field>
-            <Field id="deadline-remind-time" label="שעה">
-              <Input
+            <Field id="deadline-remind-time" label="שעה" error={errors.remindTime}>
+              <TimeInput
                 id="deadline-remind-time"
-                type="time"
                 value={values.remindTime}
-                onChange={(e) => update("remindTime", e.target.value)}
+                onChange={(time) => update("remindTime", time)}
+                error={errors.remindTime}
               />
             </Field>
           </div>
