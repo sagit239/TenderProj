@@ -75,14 +75,19 @@ export function TimelineTab({ tenderId, items, tasks, members }: Props) {
     if (!t) return <span className="text-muted">—</span>;
     const sends = !offOf(t);
     const when = reminderLabel({ ...t, reminders_off: false }, assigneesOf(t).length > 0);
+    const text = !sends
+      ? "ללא תזכורת · לסמן להפעלה"
+      : when === NEEDS_ASSIGNEE || !when
+        ? (when ?? "—")
+        : `תישלח ${when}`;
     return (
-      <label className="-ms-3 flex w-fit cursor-pointer items-center whitespace-nowrap xl:-ms-2">
+      <label className="-ms-3 flex w-fit cursor-pointer items-center xl:-ms-2">
         <Checkbox
           checked={sends}
           onChange={(e) => toggleReminders(t, e.target.checked)}
           aria-label={`שליחת תזכורת: ${d.title}`}
         />
-        <span className={sends && when !== NEEDS_ASSIGNEE ? "" : "text-muted"}>{sends ? (when ?? "—") : "ללא תזכורת"}</span>
+        <span className={sends && when !== NEEDS_ASSIGNEE ? "" : "text-muted"}>{text}</span>
       </label>
     );
   };

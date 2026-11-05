@@ -4,8 +4,9 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronDown, FileText, Mail, MoreHorizontal, Printer, Trash2 } from "lucide-react";
 import { Breadcrumb } from "@/components/ui/Breadcrumb";
-import { buttonClasses } from "@/components/ui/Button";
+import { Button, buttonClasses } from "@/components/ui/Button";
 import { ConfirmDeleteDialog } from "@/components/ui/ConfirmDeleteDialog";
+import { Dialog } from "@/components/ui/Dialog";
 import { Select } from "@/components/ui/Field";
 import { MenuButton } from "@/components/ui/MenuButton";
 import { useToast } from "@/components/ui/Toast";
@@ -22,6 +23,14 @@ const MOVED_MESSAGES: Record<TenderList, string> = {
   submitted: "המכרז הועבר להוגשו",
 };
 
+// What the status change does, shown before it is confirmed
+function statusChangeText(from: TenderStatus, to: TenderStatus) {
+  const list = listForStatus(to);
+  if (list === listForStatus(from)) return `המכרז יישאר ב${LIST_LABELS[list]}.`;
+  const moved = `המכרז יעבור ל${LIST_LABELS[list]}.`;
+  return list === "active" ? moved : `${moved} תזכורות למכרז הזה לא יישלחו.`;
+}
+
 const iconButton =
   "inline-flex size-11 shrink-0 items-center justify-center rounded-control border border-text bg-white text-text hover:bg-surface focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text md:size-[38px]";
 
@@ -30,11 +39,14 @@ export function TenderHeader({ tender, from }: { tender: Tender; from: TenderLis
   const toast = useToast();
   const [status, setStatus] = useState<TenderStatus>(tender.status);
   const [saving, setSaving] = useState(false);
+  // The status waiting for confirmation
+  const [pending, setPending] = useState<TenderStatus | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [emailOpen, setEmailOpen] = useState(false);
 
   async function changeStatus(next: TenderStatus) {
     const previous = status;
+    setPending(null);
     setStatus(next);
     setSaving(true);
     const { error } = await createClient().from("tenders").update({ status: next }).eq("id", tender.id);
@@ -82,7 +94,7 @@ export function TenderHeader({ tender, from }: { tender: Tender; from: TenderLis
               id="tender-status"
               value={status}
               disabled={saving}
-              onChange={(e) => changeStatus(e.target.value as TenderStatus)}
+              onChange={(e) => setPending(e.target.value as TenderStatus)}
             >
               {STATUSES.map((s) => (
                 <option key={s.key} value={s.key}>
@@ -134,6 +146,23 @@ export function TenderHeader({ tender, from }: { tender: Tender; from: TenderLis
         </div>
       </div>
 
+      <Dialog
+        open={pending !== null}
+        onClose={() => setPending(null)}
+        title={`לשנות את הסטטוס ל"${STATUSES.find((s) => s.key === pending)?.label}"?`}
+        footer={
+          <>
+            <Button variant="primary" onClick={() => pending && changeStatus(pending)}>
+              שינוי סטטוס
+            </Button>
+            <Button variant="secondary" onClick={() => setPending(null)}>
+              ביטול
+            </Button>
+          </>
+        }
+      >
+        {pending && <p className="text-body text-muted">{statusChangeText(status, pending)}</p>}
+      </Dialog>
       <EmailDialog open={emailOpen} onClose={() => setEmailOpen(false)} tender={tender} />
       <ConfirmDeleteDialog
         open={deleteOpen}
