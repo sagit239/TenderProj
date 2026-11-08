@@ -2,7 +2,9 @@
 
 import { useState } from "react";
 import { ConfirmDeleteDialog } from "@/components/ui/ConfirmDeleteDialog";
+import { useToast } from "@/components/ui/Toast";
 import { createClient } from "@/lib/db/client";
+import { highlightItem } from "./ScrollToItem";
 import { DEADLINE_TYPE_LABELS, NEEDS_ASSIGNEE, reminderLabel } from "@/lib/analysis";
 import { ReminderToggle } from "./ReminderToggle";
 import type { Deadline, Task } from "@/lib/types";
@@ -28,6 +30,7 @@ type Props = { tenderId: string; items: Deadline[]; tasks: TimelineTask[]; membe
 
 export function TimelineTab({ tenderId, items, tasks, members }: Props) {
   const { save, remove } = useSave();
+  const toast = useToast();
   // undefined = closed, null = adding, Deadline = editing
   const [editing, setEditing] = useState<Deadline | null | undefined>(undefined);
   const [deleting, setDeleting] = useState<Deadline | null>(null);
@@ -169,6 +172,10 @@ export function TimelineTab({ tenderId, items, tasks, members }: Props) {
         tenderId={tenderId}
         deadline={editing ?? null}
         remindAt={editing ? taskOf(editing)?.remind_at : null}
+        onAdded={(id) => {
+          toast("המועד נוסף");
+          highlightItem(id);
+        }}
         onClose={() => setEditing(undefined)}
       />
       <ConfirmDeleteDialog

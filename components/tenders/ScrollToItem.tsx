@@ -2,20 +2,29 @@
 
 import { useEffect } from "react";
 
-// "מעבר לפריט" links end with #item-<id>. Rows exist twice (desktop table, mobile card),
-// so scroll to the visible one and highlight it briefly. Remounted per tab (key).
+const HIGHLIGHT = ["outline-2", "outline-offset-2", "outline-text", "bg-surface"];
+
+// Scrolls to an item row and highlights it for a few seconds. Rows exist twice (desktop table,
+// mobile card), so the visible one is used. A row that is not on the page yet (right after
+// saving, before the refresh) is waited for, up to about 4 seconds.
+export function highlightItem(id: string, tries = 40) {
+  const el = [document.getElementById(`item-${id}`), document.getElementById(`item-m-${id}`)].find(
+    (e) => e && e.offsetParent !== null,
+  );
+  if (!el) {
+    if (tries > 0) setTimeout(() => highlightItem(id, tries - 1), 100);
+    return;
+  }
+  el.scrollIntoView({ block: "center" });
+  el.classList.add(...HIGHLIGHT);
+  setTimeout(() => el.classList.remove(...HIGHLIGHT), 4000);
+}
+
+// "מעבר לפריט" and "הצגה" links end with #item-<id>. Remounted per tab (key).
 export function ScrollToItem() {
   useEffect(() => {
     const id = window.location.hash.match(/^#item-(.+)$/)?.[1];
-    if (!id) return;
-    const el = [document.getElementById(`item-${id}`), document.getElementById(`item-m-${id}`)].find(
-      (e) => e && e.offsetParent !== null,
-    );
-    if (!el) return;
-    el.scrollIntoView({ block: "center" });
-    el.classList.add("outline-2", "outline-offset-2", "outline-text");
-    const timer = setTimeout(() => el.classList.remove("outline-2", "outline-offset-2", "outline-text"), 2500);
-    return () => clearTimeout(timer);
+    if (id) highlightItem(id);
   }, []);
   return null;
 }

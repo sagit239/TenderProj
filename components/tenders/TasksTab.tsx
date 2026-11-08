@@ -5,6 +5,7 @@ import { CalendarPlus } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Checkbox } from "@/components/ui/Checkbox";
 import { ConfirmDeleteDialog } from "@/components/ui/ConfirmDeleteDialog";
+import { useToast } from "@/components/ui/Toast";
 import { createClient } from "@/lib/db/client";
 import { NEEDS_ASSIGNEE, isOverdue, reminderLabel } from "@/lib/analysis";
 import type { Deadline, Task } from "@/lib/types";
@@ -24,6 +25,7 @@ type Props = {
 
 export function TasksTab({ tenderId, items, members, deadlines }: Props) {
   const { save, remove } = useSave();
+  const toast = useToast();
   const [editing, setEditing] = useState<Task | null | undefined>(undefined);
   const [deleting, setDeleting] = useState<Task | null>(null);
   const [adding, setAdding] = useState<Task | null>(null);
@@ -188,6 +190,12 @@ export function TasksTab({ tenderId, items, members, deadlines }: Props) {
         tenderId={tenderId}
         deadline={null}
         fromTask={adding}
+        onAdded={(id) => {
+          // "הצגה" opens the timeline tab of this same page, at the new row
+          const params = new URLSearchParams(window.location.search);
+          params.set("tab", "timeline");
+          toast("נוסף ללוח הזמנים", "info", { label: "הצגה", href: `${window.location.pathname}?${params}#item-${id}` });
+        }}
         onClose={() => setAdding(null)}
       />
       <TaskDialog

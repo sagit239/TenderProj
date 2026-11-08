@@ -1,4 +1,4 @@
-import type { DeadlineType, IssueCategory, ItemType, SourceRef, Task, TaskType, TenderAnalysis } from "@/lib/types";
+import type { DeadlineType, IssueCategory, ItemType, SourceRef, Task, TenderAnalysis } from "@/lib/types";
 
 export const DEADLINE_TYPE_LABELS: Record<DeadlineType, string> = {
   submission: "הגשת מכרז",
@@ -94,9 +94,11 @@ export function reminderLabel(
   if (t.reminders_off || !t.deadline_id) return null;
   // Without an assignee nothing goes out
   if (!hasAssignees) return NEEDS_ASSIGNEE;
+  // A chosen reminder time replaces the automatic one, for every type
+  if (t.remind_at) return formatShort(t.remind_at);
   switch (t.type) {
     case "submission":
-      return t.has_time ? "יום ו-3 ש׳ לפני" : "יום לפני";
+      return t.has_time ? "3 ש׳ לפני" : "בבוקר יום ההגשה";
     case "bidders_meeting":
       return "3 ימים לפני";
     case "clarification_questions":
@@ -104,17 +106,9 @@ export function reminderLabel(
     case "closing_meeting":
       return "בבוקר יום הפגישה";
     default:
-      return t.remind_at ? formatShort(t.remind_at) : "יום לפני";
+      return "יום לפני";
   }
 }
-
-// Long version for the task dialog, where a fixed type shows its timing as text
-export const FIXED_REMINDER_TEXT: Partial<Record<TaskType, string>> = {
-  submission: "תזכורות יישלחו יום לפני ההגשה ו-3 שעות לפני.",
-  bidders_meeting: "תזכורת תישלח 3 ימים לפני, ותזכורת נוספת יום לפני אם המשימה לא בוצעה.",
-  clarification_questions: "תזכורת תישלח יום לפני.",
-  closing_meeting: "תזכורת תישלח ב-08:00 ביום הפגישה.",
-};
 
 const shortFormatter = new Intl.DateTimeFormat("en-GB", {
   timeZone: "Asia/Jerusalem",

@@ -1,25 +1,28 @@
 "use client";
 
+import Link from "next/link";
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 
 type ToastKind = "info" | "error";
-type ToastState = { id: number; message: string; kind: ToastKind } | null;
+// An optional link next to the message, e.g. "הצגה" to the item that was just added
+type ToastAction = { label: string; href: string };
+type ToastState = { id: number; message: string; kind: ToastKind; action?: ToastAction } | null;
 
-const ToastContext = createContext<(message: string, kind?: ToastKind) => void>(() => {});
+const ToastContext = createContext<(message: string, kind?: ToastKind, action?: ToastAction) => void>(() => {});
 
-// Short message at the bottom of the screen; errors stay a little longer
+// Short message at the bottom of the screen; errors and messages with a link stay a little longer
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toast, setToast] = useState<ToastState>(null);
   const nextId = useRef(0);
 
-  const show = useCallback((message: string, kind: ToastKind = "info") => {
+  const show = useCallback((message: string, kind: ToastKind = "info", action?: ToastAction) => {
     nextId.current += 1;
-    setToast({ id: nextId.current, message, kind });
+    setToast({ id: nextId.current, message, kind, action });
   }, []);
 
   useEffect(() => {
     if (!toast) return;
-    const timer = setTimeout(() => setToast(null), toast.kind === "error" ? 7000 : 3500);
+    const timer = setTimeout(() => setToast(null), toast.kind === "error" || toast.action ? 7000 : 3500);
     return () => clearTimeout(timer);
   }, [toast]);
 
@@ -35,11 +38,22 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           <p
             key={toast.id}
             className={[
-              "max-w-[480px] rounded-control px-4 py-2.5 text-body font-medium shadow-dialog motion-safe:animate-fade-in",
+              "flex max-w-[480px] flex-wrap items-center gap-x-3 rounded-control px-4 py-2.5 text-body font-medium shadow-dialog motion-safe:animate-fade-in",
               toast.kind === "error" ? "bg-accent-tint text-accent" : "bg-text text-white",
+              toast.action ? "pointer-events-auto" : "",
             ].join(" ")}
           >
             {toast.message}
+            {toast.action && (
+              <Link
+                href={toast.action.href}
+                scroll={false}
+                onClick={() => setToast(null)}
+                className="inline-flex min-h-11 items-center font-semibold underline md:min-h-0"
+              >
+                {toast.action.label}
+              </Link>
+            )}
           </p>
         )}
       </div>

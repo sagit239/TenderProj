@@ -31,11 +31,48 @@ export async function uploadDocument(tenderId: string, file: File): Promise<bool
   return true;
 }
 
-// Storage first, then the row, so a failure never hides a file that still exists
+// A deleted document that was added after the first analysis leaves its change reports
+// view-only: what still waits for approval in the re-analyses that read it is rejected.
+// The reports stay, and items already approved stay in the tender.
+async function closeReportsOf(doc: TenderDocument): Promise<boolean> {
+  const supabase = createClient();
+  const first = await supabase
+    .from("analysis_runs")
+    .select("started_at")
+    .eq("tender_id", doc.tender_id)
+    .eq("status", "done")
+    .eq("is_reanalysis", false)
+    .order("started_at")
+    .limit(1)
+    .maybeSingle();
+  if (first.error) return false;
+  if (!first.data || new Date(doc.created_at) <= new Date(first.data.started_at)) return true;
+
+  const runs = await supabase
+    .from("analysis_runs")
+    .select("id")
+    .eq("tender_id", doc.tender_id)
+    .eq("is_reanalysis", true)
+    .neq("status", "running")
+    .gt("started_at", doc.created_at);
+  if (runs.error) return false;
+  if (runs.data.length === 0) return true;
+
+  const { error } = await supabase
+    .from("analysis_proposals")
+    .update({ status: "rejected" })
+    .eq("status", "pending")
+    .in("run_id", runs.data.map((r) => r.id));
+  return !error;
+}
+
+// Storage first, then the reports, then the row, so a failure never hides a file that
+// still exists and the delete can be tried again
 export async function deleteDocument(doc: TenderDocument): Promise<boolean> {
   const supabase = createClient();
   const removed = await supabase.storage.from(BUCKET).remove([doc.storage_path]);
   if (removed.error) return false;
+  if (!(await closeReportsOf(doc))) return false;
   const { error } = await supabase.from("tender_documents").delete().eq("id", doc.id);
   return !error;
 }

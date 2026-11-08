@@ -238,7 +238,11 @@ export function DocumentsTab({ tenderId, documents, loadFailed, analysis, hasAna
       <ConfirmDeleteDialog
         open={deleting !== null}
         title={deleting ? `למחוק את ${deleting.file_name}?` : ""}
-        description="הקובץ יימחק מהמכרז. תוצאות הניתוח הקיימות לא ישתנו. אי אפשר לבטל את הפעולה."
+        description={
+          reports.length > 0
+            ? "הקובץ יימחק מהמכרז. אם הוא נוסף אחרי הניתוח הראשון, דוחות השינויים שכללו אותו יישארו לצפייה בלבד, והפריטים שממתינים בהם לאישור לא יתווספו. פריטים שכבר אושרו יישארו במכרז. אי אפשר לבטל את הפעולה."
+            : "הקובץ יימחק מהמכרז. תוצאות הניתוח הקיימות לא ישתנו. אי אפשר לבטל את הפעולה."
+        }
         onClose={() => setDeleting(null)}
         onConfirm={async () => {
           if (!deleting) return true;
