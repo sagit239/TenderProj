@@ -10,7 +10,7 @@ const TIMEOUT_MS = 280_000;
 const MAX_OUTPUT_TOKENS = 32_000;
 
 export type AnalysisOutput = {
-  // missing_ids is filled only on a re-analysis
+  // missing_ids and changes are filled only on a re-analysis
   result: AiReanalysisResult;
   model: string;
   inputTokens: number;
@@ -81,7 +81,7 @@ ${REANALYSIS_PROMPT}`,
       throw new Error(`Response ${response.status}: ${response.incomplete_details?.reason ?? "unknown"}`);
     }
     return {
-      result: { missing_ids: [], ...(JSON.parse(response.output_text) as Partial<AiReanalysisResult>) } as AiReanalysisResult,
+      result: { missing_ids: [], changes: [], ...(JSON.parse(response.output_text) as Partial<AiReanalysisResult>) } as AiReanalysisResult,
       model: response.model,
       inputTokens: response.usage?.input_tokens ?? 0,
       outputTokens: response.usage?.output_tokens ?? 0,

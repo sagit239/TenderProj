@@ -95,6 +95,8 @@ export type Task = {
   id: string;
   deadline_id: string | null;
   title: string;
+  // How and where to do it (ADR-33), or null
+  details: string | null;
   type: TaskType;
   due_at: string | null;
   has_time: boolean;
@@ -131,7 +133,9 @@ export type ItemType = "requirement" | "deadline" | "task" | "issue";
 
 export type ProposalStatus = "pending" | "accepted" | "rejected";
 
-// Payload is the item as the AI returned it (see lib/ai/schema.ts)
+// Payload is the item as the AI returned it (see lib/ai/schema.ts).
+// An update of an existing item (ADR-33) has target_id, a payload with only the changed
+// fields (+ reason), and old_payload with the old values of those fields.
 export type AnalysisProposal = {
   id: string;
   run_id: string;
@@ -139,12 +143,16 @@ export type AnalysisProposal = {
   payload: Record<string, unknown>;
   status: ProposalStatus;
   sort_order: number;
+  target_id: string | null;
+  old_payload: Record<string, unknown> | null;
 };
 
 export type MissingItem = { item_type: ItemType; item_id: string; label: string };
 
 export type ChangeReport = {
   added: { requirements: number; deadlines: number; tasks: number; issues: number };
+  // Number of update proposals; missing in reports from before Milestone 10
+  changed?: number;
   missing: MissingItem[];
 };
 

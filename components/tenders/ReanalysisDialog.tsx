@@ -21,11 +21,24 @@ const GROUP_LABELS: Record<ItemType, string> = {
   issue: "סעיפים בעייתיים",
 };
 
-// Short text for a proposed item, from the AI payload
+// The fields an update can change, in display order (ADR-33); "date" is the date and time
+const FIELD_LABELS: Record<ItemType, [string, string][]> = {
+  requirement: [["text", "דרישה"]],
+  deadline: [["title", "שם"], ["date", "מועד"]],
+  task: [["title", "שם"], ["date", "תאריך"], ["details", "פירוט"]],
+  issue: [["title", "כותרת"], ["explanation", "הסבר"], ["suggested_question", "שאלת הבהרה"]],
+};
+
+type Values = Record<string, unknown>;
+
+const when = (date: unknown, time: unknown) =>
+  typeof date === "string" && date
+    ? formatDue(israelTimeToIso(date, typeof time === "string" ? time : null), Boolean(time))
+    : null;
+
+// Short text for a proposed new item, from the AI payload
 function proposalText(p: AnalysisProposal) {
   const x = p.payload as Record<string, string | null>;
-  const when = (date: string | null, time: string | null) =>
-    date ? formatDue(israelTimeToIso(date, time), Boolean(time)) : null;
   switch (p.item_type) {
     case "requirement":
       return x.text ?? "";
@@ -42,19 +55,32 @@ function proposalText(p: AnalysisProposal) {
   }
 }
 
+// One field's value for the "before" / "after" columns
+function fieldText(values: Values, field: string) {
+  if (field === "date") return when(values.date, values.time) ?? "בלי תאריך";
+  const v = values[field];
+  return typeof v === "string" && v.trim() ? v : "—";
+}
+
 type Props = {
   run: { id: string; finished_at: string; change_report: ChangeReport | null };
   proposals: AnalysisProposal[];
   // Links for "מעבר לפריט"; missing from the map = the item was deleted since
   itemHrefs: Record<string, string>;
+  // Updated deadlines that have a reminder time chosen by hand
+  customReminder: string[];
   closeHref: string;
 };
 
-// "תוצאות הניתוח מחדש": approve new items, and review items that were not found again
-export function ReanalysisDialog({ run, proposals, itemHrefs, closeHref }: Props) {
+// "תוצאות הניתוח מחדש": approve updates and new items, and review items not found again
+export function ReanalysisDialog({ run, proposals, itemHrefs, customReminder, closeHref }: Props) {
   const router = useRouter();
   const toast = useToast();
-  const pending = proposals.filter((p) => p.status === "pending");
+  const changes = proposals.filter((p) => p.target_id);
+  const added = proposals.filter((p) => !p.target_id);
+  // An update whose item was deleted since cannot be approved
+  const deleted = (p: AnalysisProposal) => Boolean(p.target_id && !itemHrefs[p.target_id]);
+  const pending = proposals.filter((p) => p.status === "pending" && !deleted(p));
   const [checked, setChecked] = useState<Set<string>>(() => new Set(pending.map((p) => p.id)));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -65,13 +91,21 @@ export function ReanalysisDialog({ run, proposals, itemHrefs, closeHref }: Props
   async function accept() {
     setSaving(true);
     setError(null);
-    const { data, error } = await createClient().rpc("accept_proposals", { p_run: run.id, p_accept: [...checked] });
+    const { data, error } = await createClient().rpc("accept_proposals", {
+      p_run: run.id,
+      p_accept: [...checked].filter((id) => pending.some((p) => p.id === id)),
+    });
     setSaving(false);
     if (error) {
-      setError("ההוספה לא הצליחה. אפשר לנסות שוב.");
+      setError("האישור לא הצליח. אפשר לנסות שוב.");
       return;
     }
-    toast(data === 0 ? "לא נוספו פריטים" : data === 1 ? "נוסף פריט אחד" : `נוספו ${data} פריטים`);
+    const { added: a = 0, updated: u = 0 } = (data ?? {}) as { added?: number; updated?: number };
+    const parts = [
+      ...(u ? [u === 1 ? "עודכן פריט אחד" : `עודכנו ${u} פריטים`] : []),
+      ...(a ? [a === 1 ? "נוסף פריט אחד" : `נוספו ${a} פריטים`] : []),
+    ];
+    toast(parts.length === 0 ? "לא נוספו ולא עודכנו פריטים" : parts.join(" ו"));
     close();
     router.refresh();
   }
@@ -85,6 +119,26 @@ export function ReanalysisDialog({ run, proposals, itemHrefs, closeHref }: Props
     });
   }
 
+  const typeTag = (type: ItemType) => (
+    <span className="me-2 inline-flex h-[20px] items-center rounded-tag bg-accent-tint px-1.5 align-[1px] text-small text-accent">
+      {ITEM_TYPE_LABELS[type]}
+    </span>
+  );
+
+  const statusCell = (p: AnalysisProposal, labelledBy: string, done: [string, string]) =>
+    p.status === "pending" && !deleted(p) ? (
+      <Checkbox
+        checked={checked.has(p.id)}
+        onChange={(e) => toggle(p.id, e.target.checked)}
+        aria-labelledby={labelledBy}
+        className="-ms-2.5 md:ms-0"
+      />
+    ) : (
+      <span className="inline-flex h-11 shrink-0 items-center text-small whitespace-nowrap text-muted md:h-6">
+        {deleted(p) && p.status !== "accepted" ? "הפריט נמחק" : p.status === "accepted" ? done[0] : done[1]}
+      </span>
+    );
+
   return (
     <Dialog
       open
@@ -94,7 +148,7 @@ export function ReanalysisDialog({ run, proposals, itemHrefs, closeHref }: Props
         pending.length > 0 ? (
           <>
             <Button variant="accent" onClick={accept} disabled={saving}>
-              {saving ? "מוסיפה…" : "הוספת הפריטים שסומנו"}
+              {saving ? "מאשרת…" : "אישור הפריטים שסומנו"}
             </Button>
             <Button variant="secondary" onClick={close} disabled={saving}>
               לא עכשיו
@@ -115,13 +169,72 @@ export function ReanalysisDialog({ run, proposals, itemHrefs, closeHref }: Props
         <p className="mb-2 text-body text-muted">לא נמצאו שינויים במסמכים.</p>
       )}
 
-      {proposals.length > 0 && (
+      {changes.length > 0 && (
+        <section aria-labelledby="changed-items" className="mb-5">
+          <h3 id="changed-items" className="mb-2 text-h3">
+            פריטים שהשתנו
+          </h3>
+          <ul className="flex flex-col gap-3">
+            {changes.map((p) => {
+              const before = p.old_payload ?? {};
+              const after = p.payload;
+              const fields = FIELD_LABELS[p.item_type].filter(([f]) => f in after);
+              const name = typeof before.name === "string" ? before.name : null;
+              const reason = typeof after.reason === "string" ? after.reason : "";
+              const href = p.target_id ? itemHrefs[p.target_id] : undefined;
+              const dropsReminder =
+                p.item_type === "deadline" && "date" in after && customReminder.includes(p.target_id!);
+              return (
+                <li key={p.id} className="flex items-start gap-1 border-b border-line pb-3 last:border-b-0">
+                  {statusCell(p, `change-${p.id}`, ["עודכן", "לא עודכן"])}
+                  <div className="min-w-0 flex-1 py-2.5 md:py-0.5">
+                    <p id={`change-${p.id}`} className="text-body">
+                      {typeTag(p.item_type)}
+                      {name && <span className="font-medium">{name}</span>}
+                      {href && (
+                        <Link href={href} className="ms-2 text-small text-muted underline">
+                          מעבר לפריט
+                        </Link>
+                      )}
+                    </p>
+                    <dl className="mt-1.5 flex flex-col gap-2">
+                      {fields.map(([field, label]) => (
+                        <div key={field}>
+                          <dt className="text-small font-medium text-muted">{label}</dt>
+                          <dd className="mt-0.5 grid gap-1 md:grid-cols-2 md:gap-3">
+                            <p className="rounded-control bg-surface px-2.5 py-1.5 min-w-0 text-small whitespace-pre-line [overflow-wrap:anywhere] text-muted">
+                              <span className="block text-[12px] font-medium">לפני</span>
+                              <span dir="auto">{fieldText(before, field)}</span>
+                            </p>
+                            <p className="rounded-control border border-line px-2.5 py-1.5 min-w-0 text-small whitespace-pre-line [overflow-wrap:anywhere]">
+                              <span className="block text-[12px] font-medium text-muted">אחרי</span>
+                              <span dir="auto">{fieldText(after, field)}</span>
+                            </p>
+                          </dd>
+                        </div>
+                      ))}
+                    </dl>
+                    {reason && <p className="mt-1.5 text-small text-muted">{reason}</p>}
+                    {dropsReminder && p.status === "pending" && (
+                      <p className="mt-1 text-small text-accent">
+                        מועד התזכורת שבחרת יבוטל, והתזכורת תחזור להיות אוטומטית.
+                      </p>
+                    )}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
+
+      {added.length > 0 && (
         <section aria-labelledby="new-items" className="mb-5">
           <h3 id="new-items" className="mb-2 text-h3">
             נמצאו פריטים חדשים
           </h3>
           {ORDER.map((type) => {
-            const group = proposals.filter((p) => p.item_type === type);
+            const group = added.filter((p) => p.item_type === type);
             if (group.length === 0) return null;
             return (
               <div key={type} className="mb-3">
@@ -129,22 +242,9 @@ export function ReanalysisDialog({ run, proposals, itemHrefs, closeHref }: Props
                 <ul className="flex flex-col">
                   {group.map((p) => (
                     <li key={p.id} className="flex items-start gap-1">
-                      {p.status === "pending" ? (
-                        <Checkbox
-                          checked={checked.has(p.id)}
-                          onChange={(e) => toggle(p.id, e.target.checked)}
-                          aria-labelledby={`proposal-${p.id}`}
-                          className="-ms-2.5 md:ms-0"
-                        />
-                      ) : (
-                        <span className="inline-flex h-11 shrink-0 items-center text-small text-muted md:h-6">
-                          {p.status === "accepted" ? "נוסף" : "לא נוסף"}
-                        </span>
-                      )}
+                      {statusCell(p, `proposal-${p.id}`, ["נוסף", "לא נוסף"])}
                       <span id={`proposal-${p.id}`} className="py-2.5 text-body md:py-0.5">
-                        <span className="me-2 inline-flex h-[20px] items-center rounded-tag bg-accent-tint px-1.5 align-[1px] text-small text-accent">
-                          {ITEM_TYPE_LABELS[p.item_type]}
-                        </span>
+                        {typeTag(p.item_type)}
                         <span className={p.status === "rejected" ? "text-muted" : ""}>{proposalText(p)}</span>
                       </span>
                     </li>

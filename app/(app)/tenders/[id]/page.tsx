@@ -198,7 +198,7 @@ async function loadTab(supabase: Supabase, tenderId: string, tab: string) {
     const [tasks, members, deadlines] = await Promise.all([
       supabase
         .from("tasks")
-        .select("id, deadline_id, title, type, due_at, has_time, is_done, remind_at, reminders_off, is_manual, sort_order, task_assignees(team_member_id)")
+        .select("id, deadline_id, title, details, type, due_at, has_time, is_done, remind_at, reminders_off, is_manual, sort_order, task_assignees(team_member_id)")
         .eq("tender_id", tenderId)
         .order("due_at", { nullsFirst: false })
         .order("sort_order"),
@@ -229,20 +229,30 @@ async function loadTab(supabase: Supabase, tenderId: string, tab: string) {
   return <RequirementsTab tenderId={tenderId} items={data as Requirement[]} />;
 }
 
-// The run's proposals, and links to the "not found again" items that still exist
+// The run's proposals, links to the "not found again" and updated items that still exist,
+// and the updated deadlines that have a reminder time chosen by hand
 async function loadReport(supabase: Supabase, report: ReanalysisRun, tenderId: string, from: TenderList) {
   const { data, error } = await supabase
     .from("analysis_proposals")
-    .select("id, run_id, item_type, payload, status, sort_order")
+    .select("id, run_id, item_type, payload, status, sort_order, target_id, old_payload")
     .eq("run_id", report.id)
     .order("sort_order");
   if (error) throw new Error("Could not load the change report");
+  const proposals = data as AnalysisProposal[];
 
-  const missing = report.change_report?.missing ?? [];
+  const linked = [
+    ...(report.change_report?.missing ?? []),
+    ...proposals.flatMap((p) => (p.target_id ? [{ item_type: p.item_type, item_id: p.target_id }] : [])),
+  ];
   const itemHrefs: Record<string, string> = {};
+  const deadlineTargets = proposals.filter((p) => p.target_id && p.item_type === "deadline").map((p) => p.target_id!);
+  const { data: chosen } = deadlineTargets.length
+    ? await supabase.from("tasks").select("deadline_id").in("deadline_id", deadlineTargets).not("remind_at", "is", null)
+    : { data: [] };
+  const customReminder = ((chosen ?? []) as { deadline_id: string }[]).map((t) => t.deadline_id);
   await Promise.all(
     (Object.keys(ITEM_PLACES) as ItemType[]).map(async (type) => {
-      const ids = missing.filter((m) => m.item_type === type).map((m) => m.item_id);
+      const ids = [...new Set(linked.filter((m) => m.item_type === type).map((m) => m.item_id))];
       if (ids.length === 0) return;
       const { data: found } = await supabase.from(ITEM_PLACES[type].table).select("id").in("id", ids);
       for (const row of (found ?? []) as { id: string }[]) {
@@ -250,5 +260,5 @@ async function loadReport(supabase: Supabase, report: ReanalysisRun, tenderId: s
       }
     }),
   );
-  return { proposals: data as AnalysisProposal[], itemHrefs };
+  return { proposals, itemHrefs, customReminder };
 }

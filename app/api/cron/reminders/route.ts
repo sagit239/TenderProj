@@ -12,6 +12,7 @@ type Claimed = { reminder_id: string; reminder_kind: string; member_id: string |
 type TaskInfo = {
   id: string;
   title: string;
+  details: string | null;
   due_at: string | null;
   has_time: boolean;
   tenders: { name: string };
@@ -36,7 +37,7 @@ export async function POST(request: Request) {
   const taskIds = [...new Set(due.map((r) => r.reminder_task_id))];
   const memberIds = [...new Set(due.flatMap((r) => (r.member_id ? [r.member_id] : [])))];
   const [{ data: tasks }, { data: members }] = await Promise.all([
-    db.from("tasks").select("id, title, due_at, has_time, tenders(name)").in("id", taskIds),
+    db.from("tasks").select("id, title, details, due_at, has_time, tenders(name)").in("id", taskIds),
     memberIds.length
       ? db.from("team_members").select("id, name, email").in("id", memberIds)
       : Promise.resolve({ data: [] as { id: string; name: string; email: string }[] }),
@@ -60,6 +61,7 @@ export async function POST(request: Request) {
         tenderName: task.tenders.name,
         taskTitle: task.title,
         due: task.due_at ? formatDue(task.due_at, task.has_time) : null,
+        details: task.details,
       }),
     );
 

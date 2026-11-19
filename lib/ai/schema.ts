@@ -34,7 +34,14 @@ export type AiResult = {
     time: string | null;
     source_refs: AiSourceRef[];
   }[];
-  tasks: { title: string; deadline_key: string | null; date: string | null; time: string | null }[];
+  tasks: {
+    title: string;
+    // How and where to do it (site, address, contact, email, phone, envelope, copies), or null
+    details: string | null;
+    deadline_key: string | null;
+    date: string | null;
+    time: string | null;
+  }[];
   issues: {
     category: IssueCategory;
     title: string;
@@ -86,6 +93,7 @@ export const RESULT_SCHEMA = {
     }),
     tasks: arrayOf({
       title: { type: "string" },
+      details: nullableString,
       deadline_key: nullableString,
       date: { ...nullableString, description: "YYYY-MM-DD" },
       time: { ...nullableString, description: "HH:MM (24h)" },
@@ -105,14 +113,41 @@ export const RESULT_SCHEMA = {
   },
 };
 
-// Re-analysis: only new items, plus the short ids of existing items no longer found
-export type AiReanalysisResult = AiResult & { missing_ids: string[] };
+// An existing item whose content changed in the documents (ADR-33): its short id, a short
+// reason and the new values. Fields that do not belong to the item's type are null.
+export type AiChange = {
+  id: string;
+  reason: string;
+  text: string | null;
+  title: string | null;
+  date: string | null;
+  time: string | null;
+  details: string | null;
+  explanation: string | null;
+  suggested_question: string | null;
+  source_refs: AiSourceRef[];
+};
+
+// Re-analysis: only new items, plus changed items and the short ids of items no longer found
+export type AiReanalysisResult = AiResult & { missing_ids: string[]; changes: AiChange[] };
 
 export const REANALYSIS_SCHEMA = {
   ...RESULT_SCHEMA,
-  required: [...RESULT_SCHEMA.required, "missing_ids"],
+  required: [...RESULT_SCHEMA.required, "changes", "missing_ids"],
   properties: {
     ...RESULT_SCHEMA.properties,
+    changes: arrayOf({
+      id: { type: "string" },
+      reason: { type: "string" },
+      text: nullableString,
+      title: nullableString,
+      date: { ...nullableString, description: "YYYY-MM-DD" },
+      time: { ...nullableString, description: "HH:MM (24h)" },
+      details: nullableString,
+      explanation: nullableString,
+      suggested_question: nullableString,
+      source_refs: { type: "array", items: sourceRef },
+    }),
     missing_ids: { type: "array", items: { type: "string" } },
   },
 };

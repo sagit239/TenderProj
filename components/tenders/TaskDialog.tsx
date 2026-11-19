@@ -41,7 +41,7 @@ type Props = {
   onClose: () => void;
 };
 
-// "משימה" dialog: name and assignees. Dates and reminders are set on the timeline (ADR-24)
+// "משימה" dialog: name, details and assignees. Dates and reminders are set on the timeline (ADR-24)
 export function TaskDialog({ open, tenderId, task, members, nextSortOrder, onClose }: Props) {
   return (
     <Dialog open={open} onClose={onClose} title={task ? "עריכת משימה" : "הוספת משימה"}>
@@ -59,12 +59,13 @@ export function TaskDialog({ open, tenderId, task, members, nextSortOrder, onClo
   );
 }
 
-type Values = { title: string; assignees: string[] };
+type Values = { title: string; details: string; assignees: string[] };
 type Errors = { title?: string };
 
 function TaskForm({ tenderId, task, members, nextSortOrder, onClose }: Omit<Props, "open">) {
   const [values, setValues] = useState<Values>({
     title: task?.title ?? "",
+    details: task?.details ?? "",
     assignees: task?.assignee_ids ?? [],
   });
   const [errors, setErrors] = useState<Errors>({});
@@ -86,7 +87,7 @@ function TaskForm({ tenderId, task, members, nextSortOrder, onClose }: Omit<Prop
     setErrors(next);
     if (next.title) return;
 
-    const row = { title: values.title.trim(), is_manual: true };
+    const row = { title: values.title.trim(), details: values.details.trim() || null, is_manual: true };
     const supabase = createClient();
     const ok = await save(async () => {
       if (task) {
@@ -120,6 +121,19 @@ function TaskForm({ tenderId, task, members, nextSortOrder, onClose }: Omit<Prop
       {task?.deadline_id && (
         <p className="-mt-2 text-small text-muted">תאריך ותזכורת נערכים בלשונית &quot;לוח זמנים&quot;.</p>
       )}
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor="task-details" className="text-[13px] leading-[18px] font-semibold text-text">
+          פירוט (לא חובה)
+        </label>
+        <textarea
+          id="task-details"
+          value={values.details}
+          rows={3}
+          dir="auto"
+          onChange={(e) => update("details", e.target.value)}
+          className="w-full rounded-control border-[1.5px] border-input-border bg-white px-3 py-2 text-[14px] text-text outline-none transition-[border-color,box-shadow] duration-150 focus:border-text focus:ring-3 focus:ring-text/10"
+        />
+      </div>
       <div className="flex flex-col gap-1.5">
         <label htmlFor="task-assignees" className="text-[13px] leading-[18px] font-semibold text-text">
           אחראים (לא חובה)

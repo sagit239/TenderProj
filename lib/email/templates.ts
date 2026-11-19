@@ -21,11 +21,17 @@ function layout(body: string) {
 const row = (label: string, value: string) =>
   `<tr><td style="padding:4px 0 4px 16px;color:#6E6E73;white-space:nowrap;vertical-align:top">${label}</td><td style="padding:4px 0;font-weight:600">${escapeHtml(value)}</td></tr>`;
 
+// The details may hold several lines, links and email addresses; shown as plain text
+const detailsRow = (details: string) =>
+  `<tr><td style="padding:4px 0 4px 16px;color:#6E6E73;white-space:nowrap;vertical-align:top">פירוט</td><td style="padding:4px 0">${escapeHtml(details).replace(/\r?\n/g, "<br>")}</td></tr>`;
+
 export type ReminderContent = {
   recipientName: string | null;
   tenderName: string;
   taskTitle: string;
   due: string | null;
+  // The task details line (ADR-33), or null
+  details: string | null;
 };
 
 // One reminder = one task only (PRD F7)
@@ -38,6 +44,7 @@ export function reminderEmail(to: string, c: ReminderContent): Email {
       ${row("מכרז", c.tenderName)}
       ${row("משימה", c.taskTitle)}
       ${c.due ? row("מועד", c.due) : ""}
+      ${c.details ? detailsRow(c.details) : ""}
     </table>
     <p style="margin:0;color:#6E6E73;font-size:13px">לשאלות אפשר להשיב למייל הזה.</p>`);
   const text = [
@@ -47,6 +54,7 @@ export function reminderEmail(to: string, c: ReminderContent): Email {
     `מכרז: ${c.tenderName}`,
     `משימה: ${c.taskTitle}`,
     ...(c.due ? [`מועד: ${c.due}`] : []),
+    ...(c.details ? ["פירוט:", c.details] : []),
     "",
     "לשאלות אפשר להשיב למייל הזה.",
   ].join("\n");

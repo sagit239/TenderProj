@@ -13,6 +13,7 @@ import { AssigneePicker, type Member } from "./AssigneePicker";
 import { DeadlineDialog } from "./DeadlineDialog";
 import { TaskDialog, saveAssignees } from "./TaskDialog";
 import { AddButton, Due, EmptyCard, IconActions, ItemActions, TabHeading, tdClass, thClass, useSave } from "./TabParts";
+import { DetailsText } from "./DetailsText";
 import { OverdueBadge } from "./Tags";
 
 type Props = {
@@ -117,23 +118,26 @@ export function TasksTab({ tenderId, items, members, deadlines }: Props) {
               <tbody>
                 {items.map((t) => {
                   const late = isOverdue({ due_at: t.due_at, is_done: doneOf(t) }, now);
+                  // A row with a details line is taller: every cell starts at the top
+                  const va = t.details ? "!align-top" : "align-middle";
                   return (
                     <tr
                       key={t.id}
                       id={`item-${t.id}`}
                       className={`scroll-mt-24 border-b border-line last:border-b-0 ${late ? "bg-accent-tint/60" : ""}`}
                     >
-                      <td className="px-3 py-1.5 align-middle">{doneBox(t)}</td>
-                      <td className={`${tdClass} align-middle`}>
+                      <td className={`px-3 py-1.5 ${va}`}>{doneBox(t)}</td>
+                      <td className={`${tdClass} ${va}`}>
                         <span className={doneOf(t) ? "text-muted line-through decoration-muted/60" : ""}>{t.title}</span>
                         {late && <OverdueBadge className="ms-2" />}
+                        {t.details && <DetailsText text={t.details} className="mt-0.5 max-w-prose" />}
                       </td>
-                      <td className="px-4 py-1.5 align-middle">{picker(t, `assignees-${t.id}`)}</td>
-                      <td className={`${tdClass} align-middle`}>{dueCell(t, late)}</td>
-                      <td className={`${tdClass} align-middle whitespace-nowrap`}>
+                      <td className={`px-4 py-1.5 ${va}`}>{picker(t, `assignees-${t.id}`)}</td>
+                      <td className={`${tdClass} ${va}`}>{dueCell(t, late)}</td>
+                      <td className={`${tdClass} ${va} whitespace-nowrap`}>
                         <span dir="auto">{reminder(t)}</span>
                       </td>
-                      <td className="px-2 py-1 text-end align-middle whitespace-nowrap">
+                      <td className={`px-2 py-1 text-end ${va} whitespace-nowrap`}>
                         {!t.deadline_id && addButton(t)}
                         <IconActions name={t.title} onEdit={() => setEditing(t)} onDelete={() => setDeleting(t)} />
                       </td>
@@ -158,6 +162,7 @@ export function TasksTab({ tenderId, items, members, deadlines }: Props) {
                     <div className="min-w-0 flex-1 pt-2.5">
                       <p className={`font-medium ${doneOf(t) ? "text-muted line-through decoration-muted/60" : ""}`}>{t.title}</p>
                       {late && <OverdueBadge className="mt-1" />}
+                      {t.details && <DetailsText text={t.details} className="mt-1" />}
                     </div>
                   </div>
                   <dl className="mt-2 flex flex-col gap-2 ps-2 text-body">
