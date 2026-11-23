@@ -105,11 +105,11 @@ Supabase
 | `team_members` | id, name, role, email | role: מפתח מטבלת `roles` |
 | `tenders` | id, name, department, status, decided_at?, submitted_at?, analysis_status, analysis_started_at?, analysis_error, created_at | department: `medical` / `safety`. status: `reviewing`, `preparing`, `not_bidding`, `submitted`, `won`, `lost`. analysis_status: `idle`, `running`, `done`, `failed`. ‏decided_at נשמר במעבר ל-`not_bidding`, ו-submitted_at במעבר ל-`submitted` (ונשאר גם ב-`won` / `lost`) |
 | `tender_documents` | id, tender_id, file_name, storage_path, file_type, read_warning, analyzed_at | read_warning: קובץ שלא נקרא או נקרא חלקית |
-| `requirements` | id, tender_id, text, sort_order, is_manual | פריטי סיכום הדרישות |
-| `deadlines` | id, tender_id, type, title, due_at, has_time, source_refs, is_manual, is_auto | type: `submission`, `bidders_meeting`, `clarification_questions`, `closing_meeting`, `other`. ‏has_time = false: מועד בלי שעה. ‏is_auto: פגישת סגירת פינות שנוצרה אוטומטית |
-| `tasks` | id, tender_id, deadline_id?, title, details?, type, due_at, has_time, is_done, remind_at?, reminders_off, is_manual, source_refs | details: שורת הפירוט (למשל איך ולאן מגישים), מהניתוח או מעריכה ידנית. type: סוגי המועדים, ובנוסף `regular`. ‏deadline_id מולא = המשימה בלוח הזמנים. ‏due_at במשימה בלי deadline_id = תאריך מהמכרז, לקריאה בלבד, ו-source_refs שומר את המקור שלו. ‏remind_at מיועד ל-`other`. ‏reminders_off = "ללא תזכורת": לא נוצרות תזכורות למשימה. במשימה שמקושרת למועד, ‏due_at ו-has_time מסונכרנים עם המועד |
+| `requirements` | id, tender_id, text, sort_order, is_manual, source_refs, original? | פריטי סיכום הדרישות |
+| `deadlines` | id, tender_id, type, title, due_at, has_time, source_refs, is_manual, is_auto, original? | type: `submission`, `bidders_meeting`, `clarification_questions`, `closing_meeting`, `other`. ‏has_time = false: מועד בלי שעה. ‏is_auto: פגישת סגירת פינות שנוצרה אוטומטית |
+| `tasks` | id, tender_id, deadline_id?, requirement_id?, title, details?, type, due_at, has_time, is_done, remind_at?, reminders_off, is_manual, source_refs, original? | details: שורת הפירוט (למשל איך ולאן מגישים), מהניתוח או מעריכה ידנית. type: סוגי המועדים, ובנוסף `regular`. ‏deadline_id מולא = המשימה בלוח הזמנים. ‏due_at במשימה בלי deadline_id = תאריך מהמכרז, לקריאה בלבד. ‏source_refs = המקור של המשימה. ‏requirement_id = הדרישה שהמשימה קשורה אליה (ADR-34). ‏remind_at מיועד ל-`other`. ‏reminders_off = "ללא תזכורת": לא נוצרות תזכורות למשימה. במשימה שמקושרת למועד, ‏due_at ו-has_time מסונכרנים עם המועד |
 | `task_assignees` | task_id, team_member_id | אחראי אחד או יותר לכל משימה (N:N) |
-| `issues` | id, tender_id, category, title, explanation, source_refs, suggested_question, is_manual | category: `threshold`, `guarantees`, `penalties`, `liability`, `insurance`, `payment_terms`, `one_sided`, `contradictions` |
+| `issues` | id, tender_id, category, title, explanation, source_refs, suggested_question, is_manual, original? | category: `threshold`, `guarantees`, `penalties`, `liability`, `insurance`, `payment_terms`, `one_sided`, `contradictions` |
 | `analysis_runs` | id, tender_id, started_at, finished_at, status, change_report | כל ריצת ניתוח. ‏change_report: דוח השינויים מול הגרסה הקודמת (JSON) |
 | `analysis_proposals` | id, run_id, tender_id, item_type, payload, status, target_id?, old_payload? | פריטים חדשים, או עדכונים לפריטים קיימים, מניתוח חוזר שממתינים לאישור. ‏target_id מולא = עדכון של הפריט הזה (ADR-33), ו-old_payload שומר את הערכים הישנים לתצוגת "לפני". status: `pending`, `accepted`, `rejected` |
 | `tender_questions` | id, tender_id, question, status, answer?, not_found, source_refs, error?, model?, input_tokens?, cached_tokens?, output_tokens?, created_at, answered_at? | שאלה חופשית והתשובה שלה (ADR-30). status: `running`, `done`, `failed`. ‏not_found = התשובה לא מופיעה במסמכים. ‏source_refs באותו מבנה של הסעיפים הבעייתיים |
@@ -119,17 +119,20 @@ Supabase
 
 **`source_refs`:** רשימה (JSON) של הפניות, כל אחת עם `file_name`, `page` ו-`section`. בסתירה בין מסמכים יש שתי הפניות או יותר. בקובצי Word ו-Excel ‏`page` ריק, ו-`section` מכיל את הסעיף או את שם הגיליון.
 
+**`original`:** הנוסח האחרון שהגיע מהמסמכים (JSON), בשביל "חזרה למקור" (ADR-34). דרישה: `text`. מועד: `title`. משימה: `title` ו-`details`. סעיף בעייתי: `title`, `explanation` ו-`suggested_question`. ‏`null` = הפריט לא הגיע מהניתוח. ‏`{}` = הגיע מהניתוח, אבל נערך לפני Milestone 11 והנוסח לא ידוע.
+
 **קשרים:**
 - מכרז ← מסמכים, דרישות, מועדים, משימות, סעיפים בעייתיים, ריצות ניתוח, הצעות ושאלות (1:N, מחיקה מדורגת).
 - משימה ← תזכורות (1:N, מחיקה מדורגת).
 - משימה ↔ איש צוות (N:N דרך `task_assignees`. מחיקת איש צוות מסירה אותו מהמשימות).
 - משימה → מועד (N:1, אופציונלי).
+- משימה → דרישה (N:1, אופציונלי. מחיקת דרישה משאירה את המשימה, בלי הקישור).
 
 **כללים:**
 - "באיחור" מחושב בתצוגה (`due_at < now()` ו-`is_done = false`), ולא נשמר.
 - "זכינו" מוצג בסימון בולט לפי `status = 'won'`.
 - "ארכיון" (`not_bidding`) ו"הוגשו" (`submitted`, `won`, `lost`, לפי `department`) הם תצוגות מסוננות, ולא טבלאות נפרדות.
-- `is_manual = true` מסמן פריט שהמשתמשת יצרה או ערכה (ומוצג כ"ידני"). ניתוח מחדש **לעולם לא משנה ולא מוחק** פריטים קיימים בלי אישור, ידניים או לא. עדכון שאושר משנה רק את התוכן (ADR-33).
+- `is_manual = true` מסמן פריט שהמשתמשת יצרה או ערכה, וגם משימה שנוספה ללוח הזמנים. בעמודת "מקור" של דרישות ומשימות מוצג "ידני" רק כשאין הפניות, ‏`is_manual = true` ו-`original` ריק (`null`). ניתוח מחדש **לעולם לא משנה ולא מוחק** פריטים קיימים בלי אישור, ידניים או לא. עדכון שאושר משנה רק את התוכן (ADR-33).
 - **סנכרון משימה ומועד:** Trigger מעדכן את המועד כשמשנים את התאריך במשימה המקושרת, ואת המשימות המקושרות כשמשנים את המועד.
 - **פגישת סגירת פינות:** Trigger על מועד ההגשה יוצר מועד `closing_meeting` (‏`is_auto`, בלי שעה) 3 ימי עבודה לפני ההגשה, ומשימה מקושרת "פגישת סגירת פינות". שינוי מועד ההגשה מזיז את הפגישה, אלא אם המשתמשת ערכה אותה (`is_manual`). ימי עבודה: לא שישי, לא שבת ולא תאריך מטבלת `holidays`.
 - **מועד בלי שעה:** נשמר ב-`due_at` בשעה 08:00 שעון ישראל, עם `has_time = false`, ומוצג בלי שעה.
@@ -151,8 +154,9 @@ Supabase
 
 **OpenAI API (Responses API):**
 - קובצי PDF מועלים ל-Files API של OpenAI (‏`purpose: user_data`) ומצורפים לבקשה כ-`input_file`. ‏Word ו-Excel נשלחים כטקסט אחרי המרה, בתוך הבקשה, עם שם הקובץ המקורי. נשלחת בקשה אחת עם כל המסמכים, כדי שאפשר יהיה לזהות סתירות בין מסמכים. אחרי הניתוח הקבצים נמחקים מ-OpenAI, ובנוסף הם מועלים עם תפוגה אוטומטית (`expires_after`), כגיבוי למקרה שהמחיקה נכשלה.
-- התשובה נדרשת כ-JSON במבנה קבוע (Structured Outputs, ‏`json_schema` עם `strict`): `requirements[]`, `deadlines[]`, `tasks[]`, `issues[]`. כל מועד וסעיף בעייתי כולל הפניות למקור: שם קובץ, עמוד וסעיף. כל מועד כולל סימון אם צוינה בו שעה.
-- בניתוח חוזר נשלחים ל-OpenAI גם הפריטים הקיימים (רק הטקסט שלהם, בלי שמות אנשי צוות). המודל מחזיר את הפריטים החדשים, את הפריטים הקיימים שהשתנו (`changes`, עם הערכים החדשים והסיבה) ואת הפריטים הקיימים שלא נמצאו שוב, והם הבסיס להצעות ולדוח השינויים (ADR-33).
+- התשובה נדרשת כ-JSON במבנה קבוע (Structured Outputs, ‏`json_schema` עם `strict`): `requirements[]`, `deadlines[]`, `tasks[]`, `issues[]`. כל דרישה, מועד, משימה וסעיף בעייתי כוללים הפניות למקור: קובץ, עמוד וסעיף. כל מועד כולל סימון אם צוינה בו שעה. לכל דרישה יש `key`, ולכל משימה `requirement_key` של הדרישה שהיא נגזרת ממנה, או null. ההנחיות מבקשות שהדרישה תתאר מה המכרז דורש, והמשימה מה צריך לעשות, בלי לחזור על אותו טקסט.
+- **קודי קבצים:** לפני כל קובץ נכתב קוד קצר (f1, f2…), והמודל מחזיר אותו במקום שם הקובץ. `lib/ai` מחליף את הקוד בשם המקורי. כך התשובה קצרה ומהירה יותר (ADR-34).
+- בניתוח חוזר נשלחים ל-OpenAI גם הפריטים הקיימים (רק הטקסט שלהם, בלי שמות אנשי צוות). המודל מחזיר את הפריטים החדשים, את הפריטים הקיימים שהשתנו (`changes`, עם הערכים החדשים והסיבה) ואת הפריטים הקיימים שלא נמצאו שוב, והם הבסיס להצעות ולדוח השינויים (ADR-33). משימה חדשה יכולה להתקשר לדרישה חדשה או לדרישה קיימת (ADR-34).
 - למשימות של הגשת ההצעה ושל הגשת שאלות הבהרה המודל מחזיר גם `details`: שורת פירוט עם אתר, כתובת, איש קשר, מייל, טלפון ואופן ההגשה, כשהם מופיעים במסמכים. בשאר המשימות `details` ריק.
 - הבקשה מתבצעת ב-Streaming, כדי למנוע ניתוק בבקשה ארוכה.
 - מגבלות: עד 50MB לקובץ, ועד 50MB לכל הקבצים בבקשה אחת. מכרז רגיל (כמה MB) רחוק מהמגבלה. מכרז עם סריקות כבדות שעובר אותה מקבל הודעת שגיאה ברורה.
@@ -169,7 +173,7 @@ Supabase
 2. הקבצים עולים **ישירות מהדפדפן ל-Supabase Storage**, ולא דרך Vercel. כך נעקפת מגבלת גודל הבקשה של Vercel. המגבלה היא 50MB לקובץ.
 3. הדפדפן קורא ל-`/analyze`. אם כבר רץ ניתוח (`running` שהתחיל לפני פחות מ-5 דקות), הבקשה נדחית. אחרת השרת מסמן `analysis_status = running` ואת `analysis_started_at`, ויוצר רשומת `analysis_runs`. הממשק מציג "בניתוח…", בלי אחוזים. ניתוח שנשאר `running` יותר מ-5 דקות מוצג כנכשל.
 4. השרת שולף את הקבצים, ממיר Word ו-Excel, שולח את הכול ל-OpenAI ומקבל JSON.
-5. **ניתוח ראשון:** הפריטים נשמרים ישירות. **ניתוח חוזר:** הפריטים הקיימים לא משתנים. הפריטים החדשים והעדכונים לפריטים קיימים נשמרים ב-`analysis_proposals`, ונשמר דוח שינויים ב-`analysis_runs.change_report`. הממשק מציג את ההצעות לאישור. פריט חדש שאושר נוסף למכרז, ועדכון שאושר משנה את הפריט הקיים במקום. ההצעות נשמרות ב-Database, כך שאפשר לאשר אותן גם אחרי סגירת הדפדפן.
+5. **ניתוח ראשון:** הפריטים נשמרים ישירות. **ניתוח חוזר:** הפריטים הקיימים לא משתנים. הפריטים החדשים והעדכונים לפריטים קיימים נשמרים ב-`analysis_proposals`, ונשמר דוח שינויים ב-`analysis_runs.change_report`. הממשק מציג את ההצעות לאישור. פריט חדש שאושר נוסף למכרז, ועדכון שאושר משנה את הפריט הקיים במקום, ומעדכן גם את `original` ואת המקור שלו. ההצעות נשמרות ב-Database, כך שאפשר לאשר אותן גם אחרי סגירת הדפדפן.
 6. `analysis_status = done`. אם קובץ לא נקרא, נשמר `read_warning`, והניתוח ממשיך עם שאר הקבצים.
 
 **שאלה חופשית:**
@@ -465,7 +469,7 @@ Supabase
 - ‏`original` (jsonb) בדרישות, במועדים, במשימות ובסעיפים: הנוסח האחרון שהגיע מהמסמכים. `null` = לא הגיע מהניתוח. `{}` = הגיע מהניתוח, אבל נערך לפני M11 והנוסח לא ידוע. עדכון שאושר בניתוח מחדש מעדכן גם אותו. "חזרה למקור" מחזירה רק את השדות שלו, מהדפדפן.
 - ‏`requirements.source_refs`, ושימוש ב-`tasks.source_refs` לכל משימה. ‏`tasks.requirement_id` (`on delete set null`): משימה שייכת לדרישה אחת לכל היותר.
 - הניתוח מחזיר לכל דרישה `key` (‏q1, q2…), ולכל משימה `requirement_key`. בניתוח מחדש הוא יכול להיות גם מזהה של דרישה קיימת (R3).
-- **קודי קבצים:** המודל מחזיר קוד קצר לקובץ (f1, f2…), ו-`lib/ai` מחליף אותו בשם. השמות הארוכים שחזרו בכל הפניה האריכו את ניתוח 6323 ל-203 שניות. עם הקודים ניתוח הניסיון לקח 133 שניות, עם 11.5K Tokens פלט ועלות של כ-‎$0.38.
+- **קודי קבצים:** המודל מחזיר קוד קצר לקובץ (f1, f2…), ו-`lib/ai` מחליף אותו בשם. השמות הארוכים שחזרו בכל הפניה האריכו את ניתוח 6323 ל-203 שניות. עם הקודים ניתוח הניסיון לקח 133 שניות, עם 11.5K Tokens פלט ועלות של כ-‎$0.38, וניתוח מלא באפליקציה לקח 168 שניות (11.8K Tokens). הזמן משתנה בין הרצות, והמגבלה היא 280 שניות.
 **השלכות:**
 - ‏`save_analysis` מקבלת גם את המבנה הישן (דרישות כמחרוזות), כי ה-Migration רץ על Production לפני הדחיפה.
 - מכרזים שנותחו קודם נשארים בלי הפניות ובלי קישורים. פריט שאושר בניתוח מחדש ונערך לפני M11 מוצג כ"ידני".
