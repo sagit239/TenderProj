@@ -5,11 +5,13 @@ import { ConfirmDeleteDialog } from "@/components/ui/ConfirmDeleteDialog";
 import { useToast } from "@/components/ui/Toast";
 import { createClient } from "@/lib/db/client";
 import { highlightItem } from "./ScrollToItem";
-import { DEADLINE_TYPE_LABELS, NEEDS_ASSIGNEE, reminderLabel } from "@/lib/analysis";
+import { DEADLINE_TYPE_LABELS, NEEDS_ASSIGNEE, formatSourceRef, reminderLabel } from "@/lib/analysis";
 import { ReminderToggle } from "./ReminderToggle";
 import type { Deadline, Task } from "@/lib/types";
 import { AssigneePicker, type Member } from "./AssigneePicker";
 import { DeadlineDialog } from "./DeadlineDialog";
+import { RevertAction } from "./RevertAction";
+import { SortSelect, SortTh, useSort } from "./sorting";
 import { saveAssignees } from "./TaskDialog";
 import { AddButton, Due, EmptyCard, IconActions, ItemActions, Sources, TabHeading, tdClass, thClass, useSave } from "./TabParts";
 
@@ -24,6 +26,12 @@ function deadlineSource(d: Deadline) {
   if (d.is_auto && !d.is_manual) return "אוטומטי (3 ימי עבודה לפני ההגשה)";
   if (d.source_refs.length > 0) return <Sources refs={d.source_refs} />;
   return d.is_manual ? "ידני" : "—";
+}
+
+function deadlineSourceText(d: Deadline) {
+  const source = deadlineSource(d);
+  if (typeof source !== "string") return d.source_refs.map(formatSourceRef).join(" / ");
+  return source === "—" ? null : source;
 }
 
 type Props = { tenderId: string; items: Deadline[]; tasks: TimelineTask[]; members: Member[] };
@@ -41,6 +49,31 @@ export function TimelineTab({ tenderId, items, tasks, members }: Props) {
   const taskOf = (d: Deadline) => tasks.find((t) => t.deadline_id === d.id);
   const assigneesOf = (t: TimelineTask) => assignees[t.id] ?? t.assignee_ids;
   const offOf = (t: TimelineTask) => off[t.id] ?? t.reminders_off;
+  const reminderText = (t: TimelineTask) =>
+    offOf(t) ? "ללא תזכורת" : reminderLabel({ ...t, reminders_off: false }, assigneesOf(t).length > 0);
+
+  const { sorted, sorting } = useSort(items, [
+    { key: "title", label: "מועד", value: (d) => d.title },
+    { key: "type", label: "סוג", value: (d) => DEADLINE_TYPE_LABELS[d.type] },
+    { key: "due", label: "תאריך ושעה", value: (d) => new Date(d.due_at).getTime() },
+    {
+      key: "assignees",
+      label: "אחראים",
+      value: (d) => {
+        const t = taskOf(d);
+        return (t && members.find((m) => assigneesOf(t).includes(m.id))?.name) ?? null;
+      },
+    },
+    {
+      key: "reminder",
+      label: "תזכורת",
+      value: (d) => {
+        const t = taskOf(d);
+        return t ? reminderText(t) : null;
+      },
+    },
+    { key: "source", label: "מקור", value: deadlineSourceText },
+  ]);
 
   async function changeAssignees(t: TimelineTask, ids: string[]) {
     const before = assigneesOf(t);
@@ -96,34 +129,41 @@ export function TimelineTab({ tenderId, items, tasks, members }: Props) {
         <EmptyCard text="לא נמצאו מועדים במסמכי המכרז. אפשר להוסיף מועדים ידנית." />
       ) : (
         <>
+          <SortSelect sorting={sorting} id="timeline-sort" />
           <div className="hidden overflow-hidden rounded-table border border-line bg-white xl:block">
-            <table className="w-full">
+            <table className="w-full table-fixed">
               <thead className="bg-table-head">
                 <tr className="border-b border-line text-small text-muted">
-                  <th scope="col" className={thClass}>מועד</th>
-                  <th scope="col" className={thClass}>סוג</th>
-                  <th scope="col" className={thClass}>תאריך ושעה</th>
-                  <th scope="col" className={`${thClass} w-44`}>אחראים</th>
-                  <th scope="col" className={thClass}>תזכורת</th>
-                  <th scope="col" className={thClass}>מקור</th>
-                  <th scope="col" className="w-24 px-2 py-2.5">
+                  <SortTh sorting={sorting} column="title" />
+                  <SortTh sorting={sorting} column="type" className={`${thClass} w-28`} />
+                  <SortTh sorting={sorting} column="due" className={`${thClass} w-36`} />
+                  <SortTh sorting={sorting} column="assignees" className={`${thClass} w-38`} />
+                  <SortTh sorting={sorting} column="reminder" className="w-48 px-2 py-2.5 text-start font-medium" />
+                  <SortTh sorting={sorting} column="source" className={`${thClass} w-40`} />
+                  <th scope="col" className="w-29 px-1 py-2.5">
                     <span className="sr-only">פעולות</span>
                   </th>
                 </tr>
               </thead>
               <tbody>
-                {items.map((d) => (
+                {sorted.map((d) => (
                   <tr key={d.id} id={`item-${d.id}`} className="scroll-mt-24 border-b border-line last:border-b-0">
-                    <td className={`${tdClass} min-w-36 font-medium`}>{d.title}</td>
-                    <td className={`${tdClass} whitespace-nowrap`}>{DEADLINE_TYPE_LABELS[d.type]}</td>
+                    <td className={`${tdClass} font-medium [overflow-wrap:anywhere]`}>{d.title}</td>
+                    <td className={tdClass}>{DEADLINE_TYPE_LABELS[d.type]}</td>
                     <td className={tdClass}>
                       <Due iso={d.due_at} hasTime={d.has_time} />
                     </td>
                     <td className="px-4 py-1.5 align-middle">{picker(d, `assignees-${d.id}`)}</td>
-                    <td className="px-4 py-1 align-middle">{reminder(d)}</td>
-                    <td className={`${tdClass} text-small text-muted`}>{deadlineSource(d)}</td>
-                    <td className="px-2 py-1 text-end whitespace-nowrap">
-                      <IconActions name={d.title} onEdit={() => setEditing(d)} onDelete={() => setDeleting(d)} deleteLabel="הסרה" />
+                    <td className="px-2 py-1 align-middle">{reminder(d)}</td>
+                    <td className={`${tdClass} text-small [overflow-wrap:anywhere] text-muted`}>{deadlineSource(d)}</td>
+                    <td className="px-1 py-1 text-end whitespace-nowrap">
+                      <IconActions
+                        name={d.title}
+                        onEdit={() => setEditing(d)}
+                        onDelete={() => setDeleting(d)}
+                        deleteLabel="הסרה"
+                        revert={<RevertAction table="deadlines" item={d} name={d.title} icon />}
+                      />
                     </td>
                   </tr>
                 ))}
@@ -131,7 +171,7 @@ export function TimelineTab({ tenderId, items, tasks, members }: Props) {
             </table>
           </div>
           <ul className="flex flex-col gap-2 xl:hidden">
-            {items.map((d) => (
+            {sorted.map((d) => (
               <li key={d.id} id={`item-m-${d.id}`} className="rounded-card border border-line bg-white p-4 shadow-card">
                 <p className="text-h3">{d.title}</p>
                 <dl className="mt-1 space-y-0.5 text-body">
@@ -159,7 +199,13 @@ export function TimelineTab({ tenderId, items, tasks, members }: Props) {
                   </div>
                 </dl>
                 <div className="mt-2 -ms-3 flex">
-                  <ItemActions name={d.title} onEdit={() => setEditing(d)} onDelete={() => setDeleting(d)} deleteLabel="הסרה" />
+                  <ItemActions
+                    name={d.title}
+                    onEdit={() => setEditing(d)}
+                    onDelete={() => setDeleting(d)}
+                    deleteLabel="הסרה"
+                    revert={<RevertAction table="deadlines" item={d} name={d.title} />}
+                  />
                 </div>
               </li>
             ))}

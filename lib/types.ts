@@ -76,7 +76,18 @@ export type IssueCategory =
   | "one_sided"
   | "contradictions";
 
-export type Requirement = { id: string; text: string; sort_order: number; is_manual: boolean };
+// The last text that came from the documents, by column name ("חזרה למקור", ADR-34).
+// null: not from the analysis; {}: from the analysis, but its text is not known.
+export type Original = Record<string, string | null> | null;
+
+export type Requirement = {
+  id: string;
+  text: string;
+  sort_order: number;
+  is_manual: boolean;
+  source_refs: SourceRef[];
+  original: Original;
+};
 
 export type Deadline = {
   id: string;
@@ -87,6 +98,7 @@ export type Deadline = {
   source_refs: SourceRef[];
   is_manual: boolean;
   is_auto: boolean;
+  original: Original;
 };
 
 export type TaskType = DeadlineType | "regular";
@@ -107,6 +119,10 @@ export type Task = {
   is_manual: boolean;
   sort_order: number;
   assignee_ids: string[];
+  source_refs: SourceRef[];
+  // The requirement the task belongs to, or null
+  requirement_id: string | null;
+  original: Original;
 };
 
 // A reminder that failed to send and is not yet marked as handled ("תזכורות שלא נשלחו")
@@ -127,6 +143,7 @@ export type Issue = {
   suggested_question: string;
   is_manual: boolean;
   sort_order: number;
+  original: Original;
 };
 
 export type ItemType = "requirement" | "deadline" | "task" | "issue";

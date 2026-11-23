@@ -61,17 +61,28 @@ export function Due({ iso, hasTime, className = "" }: { iso: string; hasTime: bo
       <span dir="ltr" className={`whitespace-nowrap ${className}`}>
         {formatDue(iso, hasTime)}
       </span>
-      {!hasTime && <span className="ms-2 text-small whitespace-nowrap text-muted">שעה לא צוינה</span>}
+      {/* The space lets the note wrap in a narrow column */}
+      {!hasTime && <span className="text-small text-muted"> <span className="whitespace-nowrap">שעה לא צוינה</span></span>}
     </>
   );
 }
 
-type ActionProps = { name: string; onEdit: () => void; onDelete: () => void; deleteLabel?: string };
+type ActionProps = {
+  name: string;
+  onEdit: () => void;
+  onDelete: () => void;
+  deleteLabel?: string;
+  // "חזרה למקור" (RevertAction)
+  revert?: ReactNode;
+};
+
+export const iconActionClass =
+  "inline-flex size-11 items-center justify-center rounded-control text-muted hover:bg-surface hover:text-text focus-visible:outline-2 focus-visible:outline-text md:size-9";
 
 // "✎ עריכה · 🗑 מחיקה" in grey, like the team members screen
-export function ItemActions({ name, onEdit, onDelete, deleteLabel = "מחיקה" }: ActionProps) {
+export function ItemActions({ name, onEdit, onDelete, deleteLabel = "מחיקה", revert }: ActionProps) {
   return (
-    <span className="inline-flex shrink-0 items-center text-muted">
+    <span className="inline-flex flex-wrap items-center text-muted">
       <Button variant="ghost" size="sm" onClick={onEdit} aria-label={`עריכת ${name}`}>
         <Pencil size={14} strokeWidth={1.75} aria-hidden />
         עריכה
@@ -81,20 +92,20 @@ export function ItemActions({ name, onEdit, onDelete, deleteLabel = "מחיקה"
         <Trash2 size={14} strokeWidth={1.75} aria-hidden />
         {deleteLabel}
       </Button>
+      {revert}
     </span>
   );
 }
 
 // Icon-only edit/delete for table rows
-export function IconActions({ name, onEdit, onDelete, deleteLabel = "מחיקה" }: ActionProps) {
-  const cls =
-    "inline-flex size-11 items-center justify-center rounded-control text-muted hover:bg-surface hover:text-text focus-visible:outline-2 focus-visible:outline-text md:size-9";
+export function IconActions({ name, onEdit, onDelete, deleteLabel = "מחיקה", revert }: ActionProps) {
   return (
     <span className="inline-flex">
-      <button type="button" onClick={onEdit} aria-label={`עריכת ${name}`} title="עריכה" className={cls}>
+      {revert}
+      <button type="button" onClick={onEdit} aria-label={`עריכת ${name}`} title="עריכה" className={iconActionClass}>
         <Pencil size={16} strokeWidth={1.75} />
       </button>
-      <button type="button" onClick={onDelete} aria-label={`${deleteLabel}: ${name}`} title={deleteLabel} className={cls}>
+      <button type="button" onClick={onDelete} aria-label={`${deleteLabel}: ${name}`} title={deleteLabel} className={iconActionClass}>
         <Trash2 size={16} strokeWidth={1.75} />
       </button>
     </span>

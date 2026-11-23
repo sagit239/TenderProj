@@ -25,7 +25,8 @@ export type IssueCategory = (typeof ISSUE_CATEGORIES)[number];
 export type AiSourceRef = { file_name: string; page: number | null; section: string | null };
 
 export type AiResult = {
-  requirements: { text: string }[];
+  // key: short id (q1, q2, ...) that tasks point at
+  requirements: { key: string; text: string; source_refs: AiSourceRef[] }[];
   deadlines: {
     key: string;
     type: DeadlineType;
@@ -38,9 +39,12 @@ export type AiResult = {
     title: string;
     // How and where to do it (site, address, contact, email, phone, envelope, copies), or null
     details: string | null;
+    // The requirement the task comes from: a key, or an existing short id (R1) on a re-analysis
+    requirement_key: string | null;
     deadline_key: string | null;
     date: string | null;
     time: string | null;
+    source_refs: AiSourceRef[];
   }[];
   issues: {
     category: IssueCategory;
@@ -82,7 +86,11 @@ export const RESULT_SCHEMA = {
   additionalProperties: false,
   required: ["requirements", "deadlines", "tasks", "issues", "documents"],
   properties: {
-    requirements: arrayOf({ text: { type: "string" } }),
+    requirements: arrayOf({
+      key: { type: "string" },
+      text: { type: "string" },
+      source_refs: { type: "array", items: sourceRef },
+    }),
     deadlines: arrayOf({
       key: { type: "string" },
       type: { type: "string", enum: DEADLINE_TYPES },
@@ -94,9 +102,11 @@ export const RESULT_SCHEMA = {
     tasks: arrayOf({
       title: { type: "string" },
       details: nullableString,
+      requirement_key: nullableString,
       deadline_key: nullableString,
       date: { ...nullableString, description: "YYYY-MM-DD" },
       time: { ...nullableString, description: "HH:MM (24h)" },
+      source_refs: { type: "array", items: sourceRef },
     }),
     issues: arrayOf({
       category: { type: "string", enum: ISSUE_CATEGORIES },

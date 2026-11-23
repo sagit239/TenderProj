@@ -6,6 +6,7 @@ import { createClient } from "@/lib/db/client";
 import type { Issue } from "@/lib/types";
 import { CopyButton } from "./CopyButton";
 import { IssueDialog } from "./IssueDialog";
+import { RevertAction } from "./RevertAction";
 import { AddButton, EmptyCard, ItemActions, Sources, TabHeading, useSave } from "./TabParts";
 import { CategoryTag } from "./Tags";
 
@@ -49,7 +50,12 @@ export function IssuesTab({ tenderId, items }: { tenderId: string; items: Issue[
                 </div>
               )}
               <div className="mt-2 -ms-3 flex md:justify-end">
-                <ItemActions name={issue.title} onEdit={() => setEditing(issue)} onDelete={() => setDeleting(issue)} />
+                <ItemActions
+                  name={issue.title}
+                  onEdit={() => setEditing(issue)}
+                  onDelete={() => setDeleting(issue)}
+                  revert={<RevertAction table="issues" item={issue} name={issue.title} />}
+                />
               </div>
             </li>
           ))}

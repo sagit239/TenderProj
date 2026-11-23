@@ -3,9 +3,9 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Dialog } from "@/components/ui/Dialog";
-import { Field, Input } from "@/components/ui/Field";
+import { Field, Input, Select } from "@/components/ui/Field";
 import { createClient } from "@/lib/db/client";
-import type { Task } from "@/lib/types";
+import type { Requirement, Task } from "@/lib/types";
 import { AssigneePicker, type Member } from "./AssigneePicker";
 import { useSave } from "./TabParts";
 
@@ -37,12 +37,13 @@ type Props = {
   tenderId: string;
   task: Task | null;
   members: Member[];
+  requirements: Pick<Requirement, "id" | "text">[];
   nextSortOrder: number;
   onClose: () => void;
 };
 
 // "משימה" dialog: name, details and assignees. Dates and reminders are set on the timeline (ADR-24)
-export function TaskDialog({ open, tenderId, task, members, nextSortOrder, onClose }: Props) {
+export function TaskDialog({ open, tenderId, task, members, requirements, nextSortOrder, onClose }: Props) {
   return (
     <Dialog open={open} onClose={onClose} title={task ? "עריכת משימה" : "הוספת משימה"}>
       {open && (
@@ -51,6 +52,7 @@ export function TaskDialog({ open, tenderId, task, members, nextSortOrder, onClo
           tenderId={tenderId}
           task={task}
           members={members}
+          requirements={requirements}
           nextSortOrder={nextSortOrder}
           onClose={onClose}
         />
@@ -59,14 +61,15 @@ export function TaskDialog({ open, tenderId, task, members, nextSortOrder, onClo
   );
 }
 
-type Values = { title: string; details: string; assignees: string[] };
+type Values = { title: string; details: string; assignees: string[]; requirement: string };
 type Errors = { title?: string };
 
-function TaskForm({ tenderId, task, members, nextSortOrder, onClose }: Omit<Props, "open">) {
+function TaskForm({ tenderId, task, members, requirements, nextSortOrder, onClose }: Omit<Props, "open">) {
   const [values, setValues] = useState<Values>({
     title: task?.title ?? "",
     details: task?.details ?? "",
     assignees: task?.assignee_ids ?? [],
+    requirement: task?.requirement_id ?? "",
   });
   const [errors, setErrors] = useState<Errors>({});
   const { save, busy } = useSave();
@@ -87,7 +90,12 @@ function TaskForm({ tenderId, task, members, nextSortOrder, onClose }: Omit<Prop
     setErrors(next);
     if (next.title) return;
 
-    const row = { title: values.title.trim(), details: values.details.trim() || null, is_manual: true };
+    const row = {
+      title: values.title.trim(),
+      details: values.details.trim() || null,
+      requirement_id: values.requirement || null,
+      is_manual: true,
+    };
     const supabase = createClient();
     const ok = await save(async () => {
       if (task) {
@@ -147,6 +155,21 @@ function TaskForm({ tenderId, task, members, nextSortOrder, onClose }: Omit<Prop
           className="md:h-10"
         />
       </div>
+      <Field id="task-requirement" label="דרישה קשורה (לא חובה)">
+        <Select
+          id="task-requirement"
+          value={values.requirement}
+          onChange={(e) => update("requirement", e.target.value)}
+          className="text-ellipsis"
+        >
+          <option value="">ללא</option>
+          {requirements.map((r) => (
+            <option key={r.id} value={r.id}>
+              {r.text.length > 70 ? `${r.text.slice(0, 70)}…` : r.text}
+            </option>
+          ))}
+        </Select>
+      </Field>
       <div className="flex flex-wrap gap-2 pt-2 pb-3">
         <Button type="submit" variant="primary" disabled={busy}>
           {busy ? "שומרת…" : "שמירה"}

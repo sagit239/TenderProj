@@ -77,12 +77,18 @@ async function runAnalysis(tenderId: string, runId: string) {
           model: out.model,
           input_tokens: out.inputTokens,
           output_tokens: out.outputTokens,
-          requirements: r.requirements.map((x) => x.text),
+          requirements: r.requirements,
           deadlines: r.deadlines,
           // The details line belongs only to the submission and clarification-questions tasks
           tasks: r.tasks.map((t) => {
             const type = r.deadlines.find((d) => d.key === t.deadline_key)?.type;
-            return { ...t, details: type && DETAIL_TYPES.has(type) ? t.details : null };
+            // On a re-analysis, a short id (R1) points at an existing requirement
+            const target = existing?.items.get(t.requirement_key?.trim().toUpperCase() ?? "");
+            return {
+              ...t,
+              details: type && DETAIL_TYPES.has(type) ? t.details : null,
+              requirement_id: target?.item_type === "requirement" ? target.item_id : null,
+            };
           }),
           issues: r.issues,
           documents: (docs as TenderDocument[]).map((doc, i) => {
@@ -231,7 +237,7 @@ const same = (a: string | null | undefined, b: string | null | undefined) =>
   (a ?? "").replace(/\s+/g, " ").trim() === (b ?? "").replace(/\s+/g, " ").trim();
 
 // Keeps the AI's changes that really change something: payload = only the changed fields
-// (+ reason, + the new source for deadlines and issues), old_payload = their old values
+// (+ reason, + the new source), old_payload = their old values
 function buildChanges(items: Map<string, ExistingItem>, raw: AiChange[]) {
   const seen = new Set<string>();
   return raw.flatMap((c) => {
@@ -262,9 +268,7 @@ function buildChanges(items: Map<string, ExistingItem>, raw: AiChange[]) {
     }
     if (Object.keys(payload).length === 0) return [];
     seen.add(item.item_id);
-    if ((item.item_type === "deadline" || item.item_type === "issue") && c.source_refs.length > 0) {
-      payload.source_refs = c.source_refs;
-    }
+    if (c.source_refs.length > 0) payload.source_refs = c.source_refs;
     // The short ids are internal; drop any that slipped into the reason
     payload.reason = c.reason
       .replace(/\s*\(?\b[RDTI]\d+\b\)?/g, "")

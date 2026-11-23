@@ -55,5 +55,16 @@ console.log(
   `items:   ${out.result.requirements.length} requirements, ${out.result.deadlines.length} deadlines, ` +
     `${out.result.tasks.length} tasks, ${out.result.issues.length} issues`,
 );
+const { requirements, tasks } = out.result;
+const keys = new Set(requirements.map((r) => r.key));
+const linked = tasks.filter((t) => t.requirement_key && keys.has(t.requirement_key));
+console.log(
+  `sources: ${requirements.filter((r) => r.source_refs.length).length}/${requirements.length} requirements, ` +
+    `${tasks.filter((t) => t.source_refs.length).length}/${tasks.length} tasks`,
+);
+console.log(
+  `links:   ${linked.length}/${tasks.length} tasks, ` +
+    `${requirements.filter((r) => !linked.some((t) => t.requirement_key === r.key)).length} requirements without a task`,
+);
 writeFileSync(output, JSON.stringify({ seconds, cost, ...out }, null, 2));
 console.log(`saved:   ${output}`);

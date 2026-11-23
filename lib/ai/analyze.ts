@@ -19,6 +19,16 @@ export type AnalysisOutput = {
 
 type ReadableFile = Extract<LoadedFile, { ok: true }>;
 
+// The model refers to files by a short code (f1, f2, ...): long names repeated in every
+// reference made the answer noticeably slower. The code is replaced by the real name here.
+function restoreFileNames(r: AiReanalysisResult, files: ReadableFile[]) {
+  const names = new Map(files.map((f, i) => [`f${i + 1}`, f.name]));
+  const refs = [...r.requirements, ...r.deadlines, ...r.tasks, ...r.issues, ...r.changes].flatMap((x) => x.source_refs);
+  for (const x of [...refs, ...r.documents]) {
+    x.file_name = names.get(x.file_name.trim().toLowerCase()) ?? x.file_name;
+  }
+}
+
 // existing: on a re-analysis, the text list of the items the tender already has
 export async function analyzeTender(files: ReadableFile[], existing?: string): Promise<AnalysisOutput> {
   if (files.length === 0) throw new Error("No readable files to analyze");
@@ -33,8 +43,8 @@ export async function analyzeTender(files: ReadableFile[], existing?: string): P
     const content: ResponseInputContent[] = [
       { type: "input_text", text: `מסמכי המכרז (${files.length} קבצים):` },
     ];
-    for (const file of files) {
-      content.push({ type: "input_text", text: `=== קובץ: ${file.name} ===` });
+    for (const [i, file] of files.entries()) {
+      content.push({ type: "input_text", text: `=== קובץ f${i + 1}: ${file.name} ===` });
       if (file.kind === "pdf") {
         const uploaded = await client.files.create(
           {
@@ -80,8 +90,14 @@ ${REANALYSIS_PROMPT}`,
     if (response.status !== "completed") {
       throw new Error(`Response ${response.status}: ${response.incomplete_details?.reason ?? "unknown"}`);
     }
+    const result = {
+      missing_ids: [],
+      changes: [],
+      ...(JSON.parse(response.output_text) as Partial<AiReanalysisResult>),
+    } as AiReanalysisResult;
+    restoreFileNames(result, files);
     return {
-      result: { missing_ids: [], changes: [], ...(JSON.parse(response.output_text) as Partial<AiReanalysisResult>) } as AiReanalysisResult,
+      result,
       model: response.model,
       inputTokens: response.usage?.input_tokens ?? 0,
       outputTokens: response.usage?.output_tokens ?? 0,

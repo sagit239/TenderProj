@@ -4,7 +4,7 @@ import { AnalysisBanner } from "@/components/tenders/AnalysisBanner";
 import { DocumentsTab } from "@/components/tenders/DocumentsTab";
 import { IssuesTab } from "@/components/tenders/IssuesTab";
 import { ReanalysisDialog } from "@/components/tenders/ReanalysisDialog";
-import { RequirementsTab } from "@/components/tenders/RequirementsTab";
+import { RequirementsTab, type RequirementTask } from "@/components/tenders/RequirementsTab";
 import { ScrollToItem } from "@/components/tenders/ScrollToItem";
 import { EmptyCard } from "@/components/tenders/TabParts";
 import { TasksTab } from "@/components/tenders/TasksTab";
@@ -111,7 +111,7 @@ export default async function TenderPage({
   const report = reports.find((r) => r.id === query.report);
 
   const content =
-    tab.key === "documents" ? null : hasAnalysis ? await loadTab(supabase, tender.id, tab.key) : emptyTab(tender, tab.heading);
+    tab.key === "documents" ? null : hasAnalysis ? await loadTab(supabase, tender.id, tab.key, from) : emptyTab(tender, tab.heading);
 
   return (
     <>
@@ -170,12 +170,12 @@ function emptyTab(tender: TenderAnalysis, heading: string) {
 }
 
 // Fetches only what the active tab shows
-async function loadTab(supabase: Supabase, tenderId: string, tab: string) {
+async function loadTab(supabase: Supabase, tenderId: string, tab: string, from: TenderList) {
   if (tab === "timeline") {
     const [deadlines, tasks, members] = await Promise.all([
       supabase
         .from("deadlines")
-        .select("id, type, title, due_at, has_time, source_refs, is_manual, is_auto")
+        .select("id, type, title, due_at, has_time, source_refs, is_manual, is_auto, original")
         .eq("tender_id", tenderId)
         .order("due_at"),
       // The task linked to each deadline holds its assignees and reminder settings
@@ -187,46 +187,75 @@ async function loadTab(supabase: Supabase, tenderId: string, tab: string) {
       supabase.from("team_members").select("id, name").order("name"),
     ]);
     if (deadlines.error || tasks.error || members.error) throw new Error("Could not load deadlines");
-    const linked = (
-      tasks.data as (Omit<TimelineTask, "assignee_ids"> & { task_assignees: { team_member_id: string }[] })[]
-    ).map(({ task_assignees, ...t }) => ({ ...t, assignee_ids: task_assignees.map((a) => a.team_member_id) }));
+    const linked = withAssignees(tasks.data as WithRows<TimelineTask>[]);
     return (
       <TimelineTab tenderId={tenderId} items={deadlines.data as Deadline[]} tasks={linked} members={members.data} />
     );
   }
   if (tab === "tasks") {
-    const [tasks, members, deadlines] = await Promise.all([
+    const [tasks, members, deadlines, requirements] = await Promise.all([
       supabase
         .from("tasks")
-        .select("id, deadline_id, title, details, type, due_at, has_time, is_done, remind_at, reminders_off, is_manual, sort_order, task_assignees(team_member_id)")
+        .select("id, deadline_id, title, details, type, due_at, has_time, is_done, remind_at, reminders_off, is_manual, sort_order, source_refs, requirement_id, original, task_assignees(team_member_id)")
         .eq("tender_id", tenderId)
         .order("due_at", { nullsFirst: false })
         .order("sort_order"),
       supabase.from("team_members").select("id, name").order("name"),
       supabase.from("deadlines").select("id, title").eq("tender_id", tenderId),
+      supabase.from("requirements").select("id, text").eq("tender_id", tenderId).order("sort_order"),
     ]);
-    if (tasks.error || members.error || deadlines.error) throw new Error("Could not load tasks");
-    const items = (tasks.data as (Omit<Task, "assignee_ids"> & { task_assignees: { team_member_id: string }[] })[]).map(
-      ({ task_assignees, ...t }) => ({ ...t, assignee_ids: task_assignees.map((a) => a.team_member_id) }),
+    if (tasks.error || members.error || deadlines.error || requirements.error) throw new Error("Could not load tasks");
+    return (
+      <TasksTab
+        tenderId={tenderId}
+        items={withAssignees(tasks.data as WithRows<Task>[])}
+        members={members.data}
+        deadlines={deadlines.data}
+        requirements={requirements.data}
+      />
     );
-    return <TasksTab tenderId={tenderId} items={items} members={members.data} deadlines={deadlines.data} />;
   }
   if (tab === "issues") {
     const { data, error } = await supabase
       .from("issues")
-      .select("id, category, title, explanation, source_refs, suggested_question, is_manual, sort_order")
+      .select("id, category, title, explanation, source_refs, suggested_question, is_manual, sort_order, original")
       .eq("tender_id", tenderId)
       .order("sort_order");
     if (error) throw new Error("Could not load issues");
     return <IssuesTab tenderId={tenderId} items={data as Issue[]} />;
   }
-  const { data, error } = await supabase
-    .from("requirements")
-    .select("id, text, sort_order, is_manual")
-    .eq("tender_id", tenderId)
-    .order("sort_order");
-  if (error) throw new Error("Could not load requirements");
-  return <RequirementsTab tenderId={tenderId} items={data as Requirement[]} />;
+  const [requirements, tasks, members] = await Promise.all([
+    supabase
+      .from("requirements")
+      .select("id, text, sort_order, is_manual, source_refs, original")
+      .eq("tender_id", tenderId)
+      .order("sort_order"),
+    supabase
+      .from("tasks")
+      .select("id, requirement_id, title, type, due_at, has_time, is_done, is_manual, source_refs, original, task_assignees(team_member_id)")
+      .eq("tender_id", tenderId)
+      .not("requirement_id", "is", null)
+      .order("due_at", { nullsFirst: false })
+      .order("sort_order"),
+    supabase.from("team_members").select("id, name").order("name"),
+  ]);
+  if (requirements.error || tasks.error || members.error) throw new Error("Could not load requirements");
+  return (
+    <RequirementsTab
+      tenderId={tenderId}
+      items={requirements.data as Requirement[]}
+      tasks={withAssignees(tasks.data as WithRows<RequirementTask>[])}
+      members={members.data}
+      tasksHref={tenderHref(tenderId, from, "tasks")}
+    />
+  );
+}
+
+// A task as it comes from the database, with its assignee rows
+type WithRows<T> = Omit<T, "assignee_ids"> & { task_assignees: { team_member_id: string }[] };
+
+function withAssignees<T extends { task_assignees: { team_member_id: string }[] }>(rows: T[]) {
+  return rows.map(({ task_assignees, ...t }) => ({ ...t, assignee_ids: task_assignees.map((a) => a.team_member_id) }));
 }
 
 // The run's proposals, links to the "not found again" and updated items that still exist,
